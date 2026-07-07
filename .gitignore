@@ -1,0 +1,27 @@
+# Internal tooling and planning docs — never pushed (StellarPay convention)
+/.agents/
+/.claude/
+/.codex/
+/AGENTS.md
+/CLAUDE.md
+/docs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Simulator data + generated outputs (fetch/regenerate via sim scripts)
+/sim/data/
+/sim/out/
+
+# Node (later phases)
+node_modules/
+.next/
+
+# Rust (later phases)
+target/
+
+# Env
+.env
+.env.local
