@@ -8,6 +8,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
+import { BetSlip } from "@/components/bet-slip";
 import { Countdown } from "@/components/countdown";
 import { HonestyTip } from "@/components/honesty-tip";
 import { Ladder } from "@/components/ladder";
@@ -21,6 +22,8 @@ import { useMarket } from "@/lib/use-market";
 export default function MarketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { market, ladder, outcome, move, error, loading } = useMarket(id);
+  const [selected, setSelected] = useState({ side: 0, rung: 0 });
+  const [placedAt, setPlacedAt] = useState(0); // bumps to force a poll-refresh feel
   // re-derive the phase every 30s so countdown expiry flips the UI
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -152,8 +155,11 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* The ladder */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Ladder + bet slip */}
+      <div
+        className={`grid gap-6 ${status === "Open" ? "lg:grid-cols-3" : "md:grid-cols-2"}`}
+        key={placedAt}
+      >
         {[0, 1].map((side) => (
           <Ladder
             key={side}
@@ -163,14 +169,27 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
             move={move}
             status={status}
             side={side}
+            selected={status === "Open" ? selected : null}
+            onSelect={
+              status === "Open" ? (s, r) => setSelected({ side: s, rung: r }) : undefined
+            }
           />
         ))}
+        {status === "Open" && (
+          <BetSlip
+            market={market}
+            ladder={ladder}
+            selected={selected}
+            onSelect={(s, r) => setSelected({ side: s, rung: r })}
+            onPlaced={() => setPlacedAt(Date.now())}
+          />
+        )}
       </div>
 
       <p className="text-xs text-neutral-600">
         Every number on this page is computed in your browser from on-chain pool state
-        (polled ~12s). Implied payouts include your marginal stake — piling on a rung
-        prices it down. Bet slip lands in Phase 1.5.
+        (polled ~12s). Implied payouts include your stake — piling on a rung prices it
+        down. Click a ladder row to load it into the slip.
       </p>
     </div>
   );
