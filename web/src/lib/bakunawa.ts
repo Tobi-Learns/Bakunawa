@@ -4,8 +4,10 @@
 
 import {
   Address,
+  Asset,
   BASE_FEE,
   Contract,
+  Operation,
   TransactionBuilder,
   nativeToScVal,
   scValToNative,
@@ -195,6 +197,38 @@ export function buildPlaceBetXdr(
 
 export function buildClaimXdr(bettor: string, id: bigint | number): Promise<string> {
   return buildTxXdr(bettor, contract.call("claim", addr(bettor), u64(id)));
+}
+
+/**
+ * Trustline auto-setup (StellarPay pattern): checks Horizon for the test-USDC
+ * trustline; returns a CHANGE_TRUST XDR to sign if missing, null if present.
+ * Sign + submit this before the first place_bet from a fresh wallet.
+ */
+export async function buildTrustlineXdr(address: string): Promise<string | null> {
+  const res = await fetch(`${CONFIG.horizonUrl}/accounts/${address}`);
+  if (!res.ok) throw new Error(`account not found on testnet (fund it first)`);
+  const account = (await res.json()) as {
+    balances: { asset_code?: string; asset_issuer?: string }[];
+  };
+  const has = account.balances.some(
+    (b) => b.asset_code === "USDC" && b.asset_issuer === CONFIG.usdcIssuer,
+  );
+  if (has) return null;
+  const source = await server.getAccount(address);
+  return new TransactionBuilder(source, {
+    fee: BASE_FEE,
+    networkPassphrase: CONFIG.networkPassphrase,
+  })
+    .addOperation(
+      Operation.changeTrust({ asset: new Asset("USDC", CONFIG.usdcIssuer) }),
+    )
+    .setTimeout(120)
+    .build()
+    .toXDR();
+}
+
+export function explorerTxUrl(hash: string): string {
+  return `https://stellar.expert/explorer/testnet/tx/${hash}`;
 }
 
 export async function submitAndWait(signedXdr: string): Promise<string> {

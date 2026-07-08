@@ -28,35 +28,40 @@ export function demandMult(rows: LadderRow[], side: number, rung: number): numbe
 const EPS = 10_000_000;
 
 /**
- * "If settled now" ROI for a marginal 1 USDC bet on (side, rung), assuming
- * the outcome is side winning by exactly `rung` (the minimal outcome where
- * this rung wins). Returns null when the pool has no defined price yet.
+ * "If settled now" ROI for a probe bet on (side, rung), assuming the outcome
+ * is side winning by exactly `rung` (the minimal outcome where this rung
+ * wins). The probe is included in S(m)/SideStake, so quoting a big stake
+ * prices itself down — the bet slip passes the user's actual stake here.
+ * Returns null when the pool has no defined price yet.
  */
 export function impliedRoi(
   rows: LadderRow[],
   side: number,
   rung: number,
   rakeBps: number,
+  probe: bigint = BigInt(EPS),
 ): number | null {
-  const total = Number(rows.reduce((a, r) => a + r.stake, 0n));
+  const probeN = Math.max(Number(probe), 1);
+  const total = Number(rows.reduce((a, r) => a + r.stake, 0n)) + probeN;
   const sideRows = rows.filter((r) => r.side === side);
-  const sideStake = Number(sideRows.reduce((a, r) => a + r.stake, 0n));
-  if (total <= 0 || sideStake <= 0) return null;
+  const sideStake = Number(sideRows.reduce((a, r) => a + r.stake, 0n)) + probeN;
+  if (total <= probeN) return null;
 
   const winners = sideRows.filter((r) => r.rung <= rung);
-  const winnersStake = Number(winners.reduce((a, r) => a + r.stake, 0n));
+  const winnersStake = Number(winners.reduce((a, r) => a + r.stake, 0n)) + probeN;
   const losingPool = total - winnersStake;
   const dist = losingPool * (1 - rakeBps / 10_000);
 
   const s = (m: number) =>
-    Number(sideRows.filter((r) => r.rung >= m).reduce((a, r) => a + r.stake, 0n));
-  const myMult = (sideStake + EPS) / (s(rung) + EPS);
-  let sumW = EPS * myMult;
+    Number(sideRows.filter((r) => r.rung >= m).reduce((a, r) => a + r.stake, 0n)) +
+    (m <= rung ? probeN : 0);
+  const myMult = sideStake / s(rung);
+  let sumW = probeN * myMult;
   for (const w of winners) {
-    sumW += Number(w.stake) * ((sideStake + EPS) / (s(w.rung) + EPS));
+    if (w.stake > 0n) sumW += Number(w.stake) * (sideStake / s(w.rung));
   }
   if (sumW <= 0) return null;
-  return (myMult * dist) / sumW; // ROI of the marginal EPS bet per unit stake
+  return (myMult * dist) / sumW; // profit per unit of probe stake
 }
 
 export type RungState =
