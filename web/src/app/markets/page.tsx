@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Countdown } from "@/components/countdown";
+import { MarketCardSkeleton } from "@/components/skeleton";
 import { StatusPill } from "@/components/status-pill";
 import { getLadder, getMarket, type MarketView } from "@/lib/bakunawa";
 import { formatUsdc } from "@/lib/config";
@@ -170,7 +171,11 @@ export default function MarketsPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Reading markets from chain…</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <MarketCardSkeleton key={i} />
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-neutral-400">No markets match these filters.</p>
       ) : (
