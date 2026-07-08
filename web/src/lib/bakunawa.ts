@@ -157,13 +157,17 @@ export async function getPositions(
 
 // --- Writes (build XDR for the wallet to sign) ---
 
-async function buildTxXdr(source: string, op: xdr.Operation): Promise<string> {
+export async function buildTxXdr(
+  source: string,
+  method: string,
+  ...args: xdr.ScVal[]
+): Promise<string> {
   const account = await server.getAccount(source);
   const tx = new TransactionBuilder(account, {
     fee: (Number(BASE_FEE) * 100).toString(),
     networkPassphrase: CONFIG.networkPassphrase,
   })
-    .addOperation(op)
+    .addOperation(contract.call(method, ...args))
     .setTimeout(120)
     .build();
   const sim = await server.simulateTransaction(tx);
@@ -191,12 +195,17 @@ export function buildPlaceBetXdr(
 ): Promise<string> {
   return buildTxXdr(
     bettor,
-    contract.call("place_bet", addr(bettor), u64(id), u32(side), u32(rung), i128(amount)),
+    "place_bet",
+    addr(bettor),
+    u64(id),
+    u32(side),
+    u32(rung),
+    i128(amount),
   );
 }
 
 export function buildClaimXdr(bettor: string, id: bigint | number): Promise<string> {
-  return buildTxXdr(bettor, contract.call("claim", addr(bettor), u64(id)));
+  return buildTxXdr(bettor, "claim", addr(bettor), u64(id));
 }
 
 /**

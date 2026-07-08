@@ -15,6 +15,8 @@ export const CONFIG = {
   reflectorFeed: "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
   // Funded account used as the simulation source for read-only views
   readSource: "GAUK4F5RUHGD2SSEBS4EVB7FJSFWU65ITJBV5PYPQNVNTYB2BWCFICEY",
+  // Contract admin (curator) — the `platform` identity; /admin gates on this
+  adminAddress: "GAUK4F5RUHGD2SSEBS4EVB7FJSFWU65ITJBV5PYPQNVNTYB2BWCFICEY",
 } as const;
 
 export const USDC_DECIMALS = 7;
