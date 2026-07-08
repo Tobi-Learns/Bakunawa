@@ -1,6 +1,6 @@
 // Write-through entry metadata for positions (localStorage). The contract
 // stores only (side, rung, stake, claimed); the entry-time implied ROI and tx
-// hash exist only at bet time, so the bet slip records them here for the
+// hash exist only at entry time, so the prediction slip records them here for the
 // portfolio's "at entry vs now" display. Positions placed outside this
 // browser simply show no entry data.
 

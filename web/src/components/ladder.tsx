@@ -48,7 +48,7 @@ export function Ladder({
   move: LiveMove | null;
   status: UiStatus;
   side: number;
-  /** optional bet-slip integration (Phase 1.5): currently selected rung */
+  /** optional prediction-slip integration: currently selected rung */
   selected?: { side: number; rung: number } | null;
   onSelect?: (side: number, rung: number) => void;
 }) {

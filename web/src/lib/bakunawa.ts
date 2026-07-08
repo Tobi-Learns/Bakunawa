@@ -155,9 +155,9 @@ export async function getOutcome(id: bigint | number): Promise<OutcomeView | nul
 
 export async function getPositions(
   id: bigint | number,
-  bettor: string,
+  predictor: string,
 ): Promise<PositionView[]> {
-  const rows = (await readView("get_positions", u64(id), addr(bettor))) as Record<
+  const rows = (await readView("get_positions", u64(id), addr(predictor))) as Record<
     string,
     unknown
   >[];

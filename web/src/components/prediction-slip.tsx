@@ -1,6 +1,6 @@
 "use client";
 
-// The prediction slip (v4) — two instruments, one pot:
+// The prediction slip (v4) — two instruments, one pool:
 //  PREDICTION  par-mints tradable side tickets (exit anytime on the DEX;
 //              trades move the claim, never the cash).
 //  CONVICTION  winner + minimum margin, locked at entry, all-or-nothing;

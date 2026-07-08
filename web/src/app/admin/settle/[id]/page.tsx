@@ -97,7 +97,7 @@ export default function AdminSettlePage({
         {outcome && (
           <div className="rounded border border-sky-900 bg-sky-950/40 px-4 py-3 text-sm">
             Settled: {sideName(outcome.winner)} by {outcome.margin} · losing pool{" "}
-            {formatUsdc(outcome.losingPool)} · rake {formatUsdc(outcome.rakeAmount)} USDC
+            {formatUsdc(outcome.losingPool)} · fee {formatUsdc(outcome.rakeAmount)} USDC
           </div>
         )}
 
@@ -156,7 +156,7 @@ export default function AdminSettlePage({
               onClick={() => run("Cancellation", () => buildCancelMarketXdr(address!, BigInt(id)))}
               className="rounded border border-red-900 py-2 text-sm text-red-300 hover:border-red-700 disabled:opacity-50"
             >
-              {busy === "Cancellation" ? "Cancelling…" : "Cancel market (full refunds, no rake)"}
+              {busy === "Cancellation" ? "Cancelling…" : "Cancel market (full refunds, no fee)"}
             </button>
           </>
         )}
