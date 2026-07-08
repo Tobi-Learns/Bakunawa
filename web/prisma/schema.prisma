@@ -52,16 +52,16 @@ model Market {
 model Position {
   id       String   @id // RPC event id — idempotent inserts
   marketId BigInt
-  market   Market   @relation(fields: [marketId], references: [id])
-  bettor   String
-  side     Int
-  rung     Int
-  stake    BigInt
-  txHash   String
-  ledger   Int
-  at       DateTime
+  market    Market  @relation(fields: [marketId], references: [id])
+  predictor String
+  side      Int
+  rung      Int
+  stake     BigInt
+  txHash    String
+  ledger    Int
+  at        DateTime
 
-  @@index([bettor])
+  @@index([predictor])
   @@index([marketId])
   @@map("BakunawaPosition")
 }

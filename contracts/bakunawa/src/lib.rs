@@ -41,7 +41,7 @@ pub enum Error {
     MarketExists = 3,
     MarketNotFound = 4,
     MarketNotOpen = 5,
-    BettingClosed = 6,
+    PredictionsClosed = 6,
     InvalidRung = 7,
     InvalidAmount = 8,
     InvalidSide = 9,
@@ -390,10 +390,10 @@ impl Bakunawa {
         rows
     }
 
-    pub fn get_positions(env: Env, id: u64, bettor: Address) -> Vec<Position> {
+    pub fn get_positions(env: Env, id: u64, predictor: Address) -> Vec<Position> {
         env.storage()
             .persistent()
-            .get(&DataKey::Pos(id, bettor))
+            .get(&DataKey::Pos(id, predictor))
             .unwrap_or(Vec::new(&env))
     }
 
@@ -458,7 +458,7 @@ fn require_open_entry(env: &Env, market: &Market, side: u32, amount: i128) {
         panic_with_error!(env, Error::MarketNotOpen);
     }
     if env.ledger().timestamp() >= market.close_ts {
-        panic_with_error!(env, Error::BettingClosed);
+        panic_with_error!(env, Error::PredictionsClosed);
     }
     if side > 1 {
         panic_with_error!(env, Error::InvalidSide);

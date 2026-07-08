@@ -44,7 +44,7 @@ await client.query(`
 CREATE TABLE IF NOT EXISTS "BakunawaPosition" (
   "id"       TEXT PRIMARY KEY,
   "marketId" BIGINT NOT NULL REFERENCES "BakunawaMarket"("id"),
-  "bettor"   TEXT NOT NULL,
+  "predictor" TEXT NOT NULL,
   "side"     INTEGER NOT NULL,
   "rung"     INTEGER NOT NULL,
   "stake"    BIGINT NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS "BakunawaPosition" (
   "at"       TIMESTAMP(3) NOT NULL
 )`);
 await client.query(
-  `CREATE INDEX IF NOT EXISTS "BakunawaPosition_bettor_idx" ON "BakunawaPosition"("bettor")`,
+  `CREATE INDEX IF NOT EXISTS "BakunawaPosition_predictor_idx" ON "BakunawaPosition"("predictor")`,
 );
 await client.query(
   `CREATE INDEX IF NOT EXISTS "BakunawaPosition_marketId_idx" ON "BakunawaPosition"("marketId")`,
