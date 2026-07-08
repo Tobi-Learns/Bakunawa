@@ -3,10 +3,11 @@
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
-  /* Bakunawa brand — the eclipse: a pale moon, a night sky, a serpent-teal */
-  --baku-moon: #e9e2c4;
+  /* Bakunawa brand: blood moon, night sky, and serpent-teal. */
+  --baku-moon: #ef4444;
   --baku-night: #0c1020;
   --baku-serpent: #2dd4bf;
+  --baku-serpent-deep: #0f766e;
   --baku-glow: #38bdf8;
 }
 
@@ -23,7 +24,17 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* the moon being swallowed — landing hero flourish */
+.brand-wordmark {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #f8fafc 0%, #e9e2c4 45%, #99f6e4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 24px rgba(45, 212, 191, 0.14);
+}
+
+/* The moon being swallowed: landing hero flourish. */
 @keyframes eclipse-drift {
   0%, 100% { transform: translateX(0); opacity: 0.92; }
   50% { transform: translateX(-5%); opacity: 1; }

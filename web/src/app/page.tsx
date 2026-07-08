@@ -1,35 +1,18 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/brand";
 import { LandingMarkets } from "@/components/landing-markets";
 
 function EclipseHero() {
-  // The serpent swallowing the moon — the settlement motif, large.
   return (
-    <div className="relative mx-auto h-40 w-40 shrink-0">
+    <div className="relative mx-auto grid h-44 w-44 shrink-0 place-items-center">
       <div
-        className="absolute inset-0 rounded-full blur-2xl"
-        style={{ background: "radial-gradient(circle, rgba(56,189,248,0.25), transparent 70%)" }}
+        className="absolute inset-0 rounded-full blur-3xl"
+        style={{ background: "radial-gradient(circle, rgba(45,212,191,0.24), transparent 70%)" }}
       />
-      <svg viewBox="0 0 160 160" className="eclipse-drift relative">
-        <defs>
-          <radialGradient id="hero-moon" cx="42%" cy="38%" r="65%">
-            <stop offset="0%" stopColor="#f7f1da" />
-            <stop offset="100%" stopColor="#c9bd90" />
-          </radialGradient>
-          <mask id="hero-eclipse">
-            <rect width="160" height="160" fill="white" />
-            <circle cx="112" cy="66" r="50" fill="black" />
-          </mask>
-        </defs>
-        <circle cx="72" cy="74" r="46" fill="url(#hero-moon)" mask="url(#hero-eclipse)" />
-        <path
-          d="M14 100 C 40 140, 104 140, 124 100 C 138 72, 128 40, 104 36"
-          stroke="var(--baku-serpent)"
-          strokeWidth="6"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <circle cx="104" cy="36" r="6" fill="var(--baku-serpent)" />
-      </svg>
+      <BrandMark
+        size={176}
+        className="eclipse-drift relative drop-shadow-[0_20px_60px_rgba(45,212,191,0.16)]"
+      />
     </div>
   );
 }
@@ -37,7 +20,6 @@ function EclipseHero() {
 export default function Home() {
   return (
     <div className="flex flex-col gap-16 py-8">
-      {/* Hero */}
       <section className="flex flex-col items-center gap-8 text-center md:flex-row md:text-left">
         <EclipseHero />
         <div className="flex flex-col gap-5">
@@ -76,7 +58,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Live markets */}
       <section className="flex flex-col gap-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Live markets</h2>
@@ -87,7 +68,6 @@ export default function Home() {
         <LandingMarkets />
       </section>
 
-      {/* Three-beat explainer */}
       <section className="grid gap-4 sm:grid-cols-3">
         {[
           {

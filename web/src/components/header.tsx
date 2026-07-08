@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BrandMark } from "@/components/brand";
+import { BrandWordmark } from "@/components/brand";
 import { useWallet } from "@/lib/wallet-context";
 
 function short(addr: string) {
@@ -14,9 +14,8 @@ export function Header() {
     <header className="border-b border-neutral-800">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-wide">
-            <BrandMark size={24} />
-            BAKUNAWA
+          <Link href="/" className="text-neutral-100 transition hover:text-white">
+            <BrandWordmark size={30} />
           </Link>
           <nav className="flex gap-4 text-sm text-neutral-400">
             <Link href="/markets" className="hover:text-neutral-100">
