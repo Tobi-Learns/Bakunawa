@@ -1,17 +1,21 @@
 import Link from "next/link";
-import { BrandMark } from "@/components/brand";
+import Image from "next/image";
 import { LandingMarkets } from "@/components/landing-markets";
 
 function EclipseHero() {
   return (
-    <div className="relative mx-auto grid h-44 w-44 shrink-0 place-items-center">
+    <div className="relative mx-auto grid h-44 w-64 shrink-0 place-items-center overflow-hidden rounded-lg border border-red-950/50 bg-black md:h-52 md:w-80">
       <div
         className="absolute inset-0 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(circle, rgba(45,212,191,0.24), transparent 70%)" }}
+        style={{ background: "radial-gradient(circle, rgba(239,68,68,0.22), transparent 70%)" }}
       />
-      <BrandMark
-        size={176}
-        className="eclipse-drift relative drop-shadow-[0_20px_60px_rgba(45,212,191,0.16)]"
+      <Image
+        src="/brand/bakunawa-logo-wide.png"
+        alt=""
+        width={640}
+        height={427}
+        priority
+        className="eclipse-drift relative h-full w-full object-cover drop-shadow-[0_20px_60px_rgba(239,68,68,0.18)]"
       />
     </div>
   );

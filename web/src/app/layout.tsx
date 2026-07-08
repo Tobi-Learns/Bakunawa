@@ -23,8 +23,8 @@ export const metadata: Metadata = {
   description:
     "The prediction market that rewards conviction: forecast the winner and how big they'll win. The bolder your call, the bigger your share. Settled trustlessly on Stellar.",
   icons: {
-    icon: "/icon",
-    apple: "/icon",
+    icon: "/brand/bakunawa-logo-mark.png",
+    apple: "/brand/bakunawa-logo-mark.png",
   },
   openGraph: {
     title: "Bakunawa - Dominance Prediction Market",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
       "Forecast the winner and how big. A Stellar prediction market where the pool rewards conviction.",
     url: "/",
     siteName: "Bakunawa",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630 }],
+    images: [{ url: "/brand/bakunawa-logo-wide.png", width: 1536, height: 1024 }],
     type: "website",
   },
   twitter: {
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     title: "Bakunawa - Dominance Prediction Market",
     description:
       "Forecast the winner and how big. A Stellar prediction market where the pool rewards conviction.",
-    images: ["/twitter-image"],
+    images: ["/brand/bakunawa-logo-wide.png"],
   },
 };
 
