@@ -4,10 +4,10 @@ import { LandingMarkets } from "@/components/landing-markets";
 
 function EclipseHero() {
   return (
-    <div className="relative mx-auto grid h-44 w-64 shrink-0 place-items-center overflow-hidden rounded-lg border border-red-950/50 bg-black md:h-52 md:w-80">
+    <div className="relative mx-auto grid h-56 w-80 shrink-0 place-items-center md:h-72 md:w-[30rem]">
       <div
-        className="absolute inset-0 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(circle, rgba(239,68,68,0.22), transparent 70%)" }}
+        className="absolute inset-6 rounded-full blur-3xl"
+        style={{ background: "radial-gradient(circle, rgba(239,68,68,0.2), transparent 72%)" }}
       />
       <Image
         src="/brand/bakunawa-logo-wide.png"
@@ -15,7 +15,7 @@ function EclipseHero() {
         width={640}
         height={427}
         priority
-        className="eclipse-drift relative h-full w-full object-cover drop-shadow-[0_20px_60px_rgba(239,68,68,0.18)]"
+        className="hero-logo-fade relative h-full w-full object-cover drop-shadow-[0_22px_70px_rgba(239,68,68,0.16)]"
       />
     </div>
   );
