@@ -2,8 +2,9 @@
 // indexer/DB (Phase 1.6) becomes the real browse source; until then the
 // registry is built-in demo ids plus any id successfully opened locally.
 
-// v4 contract markets only (1001–2001 lived on the retired v2 contract)
-const BUILTIN: number[] = [3001];
+// Demo catalog on the current clean contract (CACPGURD…I22L). Earlier ids
+// (1xxx–3xxx) lived on retired contracts.
+const BUILTIN: number[] = [4003, 4002, 4001];
 const KEY = "bakunawa:known-markets";
 
 export function knownMarketIds(): number[] {
