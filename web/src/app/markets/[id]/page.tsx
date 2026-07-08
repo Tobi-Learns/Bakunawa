@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { Countdown } from "@/components/countdown";
+import { CrowdForecast } from "@/components/crowd-forecast";
 import { MarketCharts } from "@/components/market-charts";
 import { PredictionSlip } from "@/components/prediction-slip";
 import { TradeWidget } from "@/components/trade-widget";
@@ -156,6 +157,9 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           .
         </div>
       )}
+
+      {/* Crowd forecast — the headline (inverted from pool state) */}
+      {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}
 
       {/* Ladder + bet slip */}
       <div
