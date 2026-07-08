@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bakunawa — Dominance Prediction Market",
   description:
-    "Forecast the winner and the margin of victory. One shared parimutuel pool per event, priced transparently, settled on Stellar.",
+    "The prediction market that rewards conviction: forecast the winner and how big they'll win. The bolder your call, the bigger your share. Settled trustlessly on Stellar.",
 };
 
 export default function RootLayout({
