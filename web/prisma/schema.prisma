@@ -1,0 +1,73 @@
+// Bakunawa read-cache + registry. THE CHAIN IS THE SOURCE OF TRUTH — these
+// tables cache on-chain state for fast browsing and hold the off-chain
+// metadata the contract deliberately doesn't store (title, category, display
+// curve per S7). The indexer (src/lib/indexer.ts) is the only writer.
+//
+// NOTE: tables are prefixed Bakunawa* because this Postgres is currently
+// SHARED with StellarPay (same personal Supabase project, testnet-only) —
+// dedicated-DB decision deferred to Tobi before any public deploy.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Market {
+  id          BigInt   @id // on-chain u64 market id
+  sideA       String
+  sideB       String
+  oracle      String // "Admin" | "Reflector"
+  asset       String? // Reflector asset symbol
+  rungs       Int[]
+  closeTs     Int
+  settleTs    Int
+  rakeBps     Int
+  minPool     BigInt   @default(0)
+  baseline    String? // i128 as string
+  status      String // on-chain: Open | Settled | Cancelled
+  pool        BigInt   @default(0) // cached total staked (stroops)
+  // outcome cache (Settled only)
+  winner      Int?
+  margin      Int?
+  losingPool  BigInt?
+  rakeAmount  BigInt?
+  // off-chain metadata (curator-managed, Phase 1.7)
+  title       String?
+  description String?
+  category    String? // "crypto" | "nba" | ...
+  curve       Json? // S7: display/context curve table, never a settlement input
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  positions   Position[]
+
+  @@index([status])
+  @@map("BakunawaMarket")
+}
+
+model Position {
+  id       String   @id // RPC event id — idempotent inserts
+  marketId BigInt
+  market   Market   @relation(fields: [marketId], references: [id])
+  bettor   String
+  side     Int
+  rung     Int
+  stake    BigInt
+  txHash   String
+  ledger   Int
+  at       DateTime
+
+  @@index([bettor])
+  @@index([marketId])
+  @@map("BakunawaPosition")
+}
+
+model IndexerCursor {
+  id         Int      @id @default(1)
+  lastLedger Int
+  updatedAt  DateTime @updatedAt
+
+  @@map("BakunawaCursor")
+}
