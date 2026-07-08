@@ -65,6 +65,17 @@ CREATE TABLE IF NOT EXISTS "BakunawaCursor" (
   "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`);
 
+await client.query(`
+CREATE TABLE IF NOT EXISTS "BakunawaPriceSample" (
+  "id"    TEXT PRIMARY KEY,
+  "asset" TEXT NOT NULL,
+  "ts"    INTEGER NOT NULL,
+  "price" TEXT NOT NULL
+)`);
+await client.query(
+  `CREATE INDEX IF NOT EXISTS "BakunawaPriceSample_asset_ts_idx" ON "BakunawaPriceSample"("asset", "ts")`,
+);
+
 const check = await client.query(
   `SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'Bakunawa%' ORDER BY 1`,
 );

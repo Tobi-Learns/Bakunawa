@@ -8,6 +8,7 @@ import { rpc, scValToNative } from "@stellar/stellar-sdk";
 import { getLadder, getMarket, getOutcome } from "./bakunawa";
 import { CONFIG } from "./config";
 import { db } from "./db";
+import { FEED_RESOLUTION, getLastPrice } from "./reflector";
 
 const server = new rpc.Server(CONFIG.rpcUrl);
 const FIRST_RUN_LOOKBACK = 9_000; // ledgers (~12h at ~5s) — RPC retention-safe
@@ -163,5 +164,28 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
     create: { id: 1, lastLedger: latestLedger },
   });
 
+  await samplePrices().catch(() => {}); // best-effort, never fails the run
+
   return { scannedFrom, latestLedger, eventsSeen, marketsSynced: synced, positionsInserted };
+}
+
+/** 1.9c: record a Reflector price sample for every asset with a live market
+ *  (Open, or awaiting settlement) — feeds the price-vs-thresholds chart. */
+async function samplePrices(): Promise<void> {
+  const live = await db.market.findMany({
+    where: { oracle: "Reflector", status: "Open" },
+    select: { asset: true },
+    distinct: ["asset"],
+  });
+  for (const { asset } of live) {
+    if (!asset) continue;
+    const p = await getLastPrice(asset).catch(() => null);
+    if (!p) continue;
+    const ts = p.timestamp - (p.timestamp % FEED_RESOLUTION);
+    await db.priceSample.upsert({
+      where: { id: `${asset}-${ts}` },
+      update: {},
+      create: { id: `${asset}-${ts}`, asset, ts, price: p.price.toString() },
+    });
+  }
 }
