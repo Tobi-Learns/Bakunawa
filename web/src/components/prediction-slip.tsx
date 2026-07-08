@@ -1,22 +1,27 @@
 "use client";
 
-// The bet slip (1.5a) — lives on the market page, only while betting is open.
-// Signature interaction: slide the margin rung and watch the multiplier +
-// implied payout reprice live (your own stake is included in the quote, so
-// piling on a rung honestly prices it down). Submit chains trustline setup
-// (first bet from a fresh wallet) -> place_bet, both signed in Freighter.
+// The prediction slip (v4) — two instruments, one pot:
+//  PREDICTION  par-mints tradable side tickets (exit anytime on the DEX;
+//              trades move the claim, never the cash).
+//  CONVICTION  winner + minimum margin, locked at entry, all-or-nothing;
+//              the rung slider repricing live is the signature interaction.
+// Quotes include the user's own stake (self-pricing). Submits chain
+// trustline setup (USDC + the ticket asset for predictions) -> sign -> submit.
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  buildPlaceBetXdr,
+  buildAssetTrustlineXdr,
+  buildConvictionXdr,
+  buildMintTicketsXdr,
   buildTrustlineXdr,
   explorerTxUrl,
   submitAndWait,
+  ticketAssetCode,
   type LadderRowView,
   type MarketView,
 } from "@/lib/bakunawa";
-import { formatUsdc, parseUsdc } from "@/lib/config";
+import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
 import { demandMult, impliedRoi } from "@/lib/parimutuel";
 import { recordPositionMeta } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
@@ -24,13 +29,11 @@ import { HonestyTip } from "./honesty-tip";
 
 type Phase =
   | { step: "idle" }
-  | { step: "trustline" }
-  | { step: "signing" }
-  | { step: "submitting" }
-  | { step: "done"; txHash: string }
+  | { step: "busy"; what: string }
+  | { step: "done"; txHash: string; kind: "prediction" | "conviction" }
   | { step: "error"; message: string };
 
-export function BetSlip({
+export function PredictionSlip({
   market,
   ladder,
   selected,
@@ -47,6 +50,8 @@ export function BetSlip({
   const [stakeText, setStakeText] = useState("10");
   const [phase, setPhase] = useState<Phase>({ step: "idle" });
 
+  // selected.rung 0 = regular prediction; >=1 = conviction on that rung
+  const mode: "prediction" | "conviction" = selected.rung === 0 ? "prediction" : "conviction";
   const rungSteps = useMemo(() => [0, ...market.rungs], [market.rungs]);
   const rungIndex = Math.max(0, rungSteps.indexOf(selected.rung));
   const stake = useMemo(() => {
@@ -66,61 +71,74 @@ export function BetSlip({
   const sideName = (s: number) => (s === 0 ? market.sideA : market.sideB);
   const rungLabel = (rung: number) =>
     rung === 0
-      ? "Winner only"
+      ? "None (regular)"
       : market.oracle === "Reflector"
         ? `≥ ${(rung / 100).toFixed(2)}%`
         : `≥ ${rung}`;
 
-  const busy = ["trustline", "signing", "submitting"].includes(phase.step);
+  const busy = phase.step === "busy";
 
-  async function placeBet() {
+  async function submit() {
     if (!address) {
       await connect();
       return;
     }
     if (stake <= 0n) return;
     try {
-      setPhase({ step: "trustline" });
-      const trustXdr = await buildTrustlineXdr(address);
-      if (trustXdr) {
-        const signed = await signTransaction(trustXdr);
-        await submitAndWait(signed);
+      setPhase({ step: "busy", what: "Checking trustlines…" });
+      const trusts = [await buildTrustlineXdr(address)];
+      if (mode === "prediction") {
+        trusts.push(
+          await buildAssetTrustlineXdr(
+            address,
+            ticketAssetCode(market.id, selected.side),
+            CONFIG.ticketIssuer,
+          ),
+        );
       }
-      setPhase({ step: "signing" });
+      for (const t of trusts) {
+        if (t) {
+          const signed = await signTransaction(t);
+          await submitAndWait(signed);
+        }
+      }
+      setPhase({ step: "busy", what: "Sign in Freighter…" });
       const entryRoi = quote ?? 0;
-      const xdr = await buildPlaceBetXdr(
-        address,
-        BigInt(market.id),
-        selected.side,
-        selected.rung,
-        stake,
-      );
+      const xdr =
+        mode === "prediction"
+          ? await buildMintTicketsXdr(address, BigInt(market.id), selected.side, stake)
+          : await buildConvictionXdr(
+              address,
+              BigInt(market.id),
+              selected.side,
+              selected.rung,
+              stake,
+            );
       const signed = await signTransaction(xdr);
-      setPhase({ step: "submitting" });
+      setPhase({ step: "busy", what: "Submitting…" });
       const txHash = await submitAndWait(signed);
-      recordPositionMeta({
-        marketId: Number(market.id),
-        side: selected.side,
-        rung: selected.rung,
-        stake: stake.toString(),
-        entryRoi,
-        txHash,
-        at: Date.now(),
-      });
-      setPhase({ step: "done", txHash });
+      if (mode === "conviction") {
+        recordPositionMeta({
+          marketId: Number(market.id),
+          side: selected.side,
+          rung: selected.rung,
+          stake: stake.toString(),
+          entryRoi,
+          txHash,
+          at: Date.now(),
+        });
+      }
+      setPhase({ step: "done", txHash, kind: mode });
       onPlaced();
     } catch (e) {
-      setPhase({
-        step: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
+      setPhase({ step: "error", message: e instanceof Error ? e.message : String(e) });
     }
   }
 
   return (
     <div className="rounded-lg border border-neutral-800 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold">Place a prediction</h2>
+        <h2 className="font-semibold">Prediction slip</h2>
         <HonestyTip />
       </div>
 
@@ -141,8 +159,8 @@ export function BetSlip({
         ))}
       </div>
 
-      {/* Margin rung slider — the signature interaction */}
-      <div className="mb-4">
+      {/* Margin rung slider — 0 = regular, right = deeper conviction */}
+      <div className="mb-2">
         <div className="mb-1 flex items-center justify-between text-sm">
           <span className="text-neutral-400">Dominance margin</span>
           <span className="font-medium">{rungLabel(selected.rung)}</span>
@@ -158,10 +176,33 @@ export function BetSlip({
         />
         <div className="mt-1 flex justify-between text-[10px] text-neutral-600">
           {rungSteps.map((r) => (
-            <span key={r}>{r === 0 ? "win" : rungLabel(r).replace("≥ ", "")}</span>
+            <span key={r}>{r === 0 ? "none" : rungLabel(r).replace("≥ ", "")}</span>
           ))}
         </div>
       </div>
+
+      {/* Instrument explainer */}
+      <p
+        className={`mb-4 rounded border px-3 py-2 text-xs ${
+          mode === "prediction"
+            ? "border-emerald-900 bg-emerald-950/30 text-emerald-200"
+            : "border-amber-900 bg-amber-950/30 text-amber-200"
+        }`}
+      >
+        {mode === "prediction" ? (
+          <>
+            <b>Regular prediction</b> — mints tradable {sideName(selected.side)} tickets
+            at par. Sell anytime before lock on the DEX; settlement pays whoever holds
+            them.
+          </>
+        ) : (
+          <>
+            <b>Conviction</b> — locked at entry. No exit, no transfer, all-or-nothing:
+            wins only if {sideName(selected.side)} wins by {rungLabel(selected.rung)}{" "}
+            (exact hit wins).
+          </>
+        )}
+      </p>
 
       {/* Stake */}
       <div className="mb-4">
@@ -195,32 +236,27 @@ export function BetSlip({
           </span>
         </div>
         <p className="mt-1.5 text-xs text-neutral-600">
-          Wins only if {sideName(selected.side)}{" "}
-          {selected.rung === 0 ? "wins" : `wins by ${rungLabel(selected.rung)}`} — exact
-          hit wins. Quote includes your stake; the pool reprices as money moves.
+          Quote includes your stake; the pool reprices as money moves.
         </p>
       </div>
 
-      {/* Submit */}
       <button
-        onClick={placeBet}
+        onClick={submit}
         disabled={busy || (address !== null && stake <= 0n)}
         className="w-full rounded bg-neutral-100 py-2.5 font-medium text-neutral-900 hover:bg-white disabled:opacity-50"
       >
         {!address
-          ? "Connect wallet to bet"
-          : phase.step === "trustline"
-            ? "Checking trustline…"
-            : phase.step === "signing"
-              ? "Sign in Freighter…"
-              : phase.step === "submitting"
-                ? "Submitting…"
-                : "Place prediction"}
+          ? "Connect wallet to predict"
+          : busy
+            ? phase.what
+            : mode === "prediction"
+              ? "Mint tickets"
+              : "Lock conviction"}
       </button>
 
       {phase.step === "done" && (
         <p className="mt-3 text-sm text-emerald-400">
-          Prediction placed —{" "}
+          {phase.kind === "prediction" ? "Tickets minted" : "Conviction locked"} —{" "}
           <a
             href={explorerTxUrl(phase.txHash)}
             target="_blank"

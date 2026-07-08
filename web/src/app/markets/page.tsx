@@ -34,6 +34,8 @@ function cardFromApi(row: Record<string, unknown>): Card {
       baseline: BigInt((row.baseline as string) ?? "0"),
       rakeBps: Number(row.rakeBps),
       minPool: BigInt((row.minPool as string) ?? "0"),
+      ticketA: (row.ticketA as string) ?? "",
+      ticketB: (row.ticketB as string) ?? "",
       status: row.status as MarketView["status"],
     },
     pool: BigInt((row.pool as string) ?? "0"),

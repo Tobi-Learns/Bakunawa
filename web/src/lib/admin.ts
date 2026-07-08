@@ -18,6 +18,11 @@ export interface CreateMarketParams {
   asset: string; // Reflector symbol, e.g. "BTC" (ignored for Admin)
   rakeBps: number;
   minPool: bigint;
+  /** v4: per-side ticket SACs — classic assets pre-minted into the contract's
+   *  custody BEFORE create_market (scripts/list-market.mjs does the whole
+   *  sequence; the form accepts the SAC addresses it prints). */
+  ticketA: string;
+  ticketB: string;
 }
 
 /** MarketParams struct ScVal — entries MUST be sorted by field name (XDR map). */
@@ -40,6 +45,8 @@ function marketParamsScVal(p: CreateMarketParams): xdr.ScVal {
     entry("settle_ts", nativeToScVal(BigInt(p.settleTs), { type: "u64" })),
     entry("side_a", xdr.ScVal.scvSymbol(p.sideA)),
     entry("side_b", xdr.ScVal.scvSymbol(p.sideB)),
+    entry("ticket_a", new Address(p.ticketA).toScVal()),
+    entry("ticket_b", new Address(p.ticketB).toScVal()),
   ]);
 }
 

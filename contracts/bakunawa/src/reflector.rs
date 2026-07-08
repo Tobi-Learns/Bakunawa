@@ -19,6 +19,7 @@ pub struct PriceData {
     pub timestamp: u64,
 }
 
+#[allow(dead_code)] // the trait exists to generate ReflectorClient
 #[contractclient(name = "ReflectorClient")]
 pub trait ReflectorOracle {
     /// Most recent price record for the asset.

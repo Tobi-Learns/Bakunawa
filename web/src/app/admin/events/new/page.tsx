@@ -31,6 +31,8 @@ export default function NewEventPage() {
     settle: "",
     rakeBps: 300,
     minPool: "0",
+    ticketA: "",
+    ticketB: "",
   });
   const [state, setState] = useState<
     | { step: "idle" }
@@ -55,6 +57,11 @@ export default function NewEventPage() {
       if (!Number.isFinite(closeTs) || !Number.isFinite(settleTs))
         throw new Error("close/settle datetimes required");
       if (closeTs > settleTs) throw new Error("close must be at or before settle");
+      if (!form.ticketA.trim() || !form.ticketB.trim())
+        throw new Error(
+          "ticket SAC addresses required — run scripts/list-market.mjs steps 1-3 " +
+            "(assets + pre-mint) first, or use the script for the whole listing",
+        );
       const id = snowflakeU64();
 
       setState({ step: "busy", what: "Building transaction…" });
@@ -69,6 +76,8 @@ export default function NewEventPage() {
         asset: form.asset.trim(),
         rakeBps: Number(form.rakeBps),
         minPool: parseUsdc(form.minPool || "0"),
+        ticketA: form.ticketA.trim(),
+        ticketB: form.ticketB.trim(),
       });
       setState({ step: "busy", what: "Sign in Freighter…" });
       const signed = await signTransaction(xdr);
@@ -177,6 +186,21 @@ export default function NewEventPage() {
               <input type="datetime-local" className={input} value={form.settle} onChange={(e) => set("settle", e.target.value)} required />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Ticket SAC — side A</label>
+              <input className={input} value={form.ticketA} onChange={(e) => set("ticketA", e.target.value)} placeholder="C… (from list-market.mjs)" required />
+            </div>
+            <div>
+              <label className={label}>Ticket SAC — side B</label>
+              <input className={input} value={form.ticketB} onChange={(e) => set("ticketB", e.target.value)} placeholder="C…" required />
+            </div>
+          </div>
+          <p className="text-xs text-neutral-500">
+            v4: ticket assets must exist and be pre-minted into the contract before
+            listing — <code>node scripts/list-market.mjs</code> does the full sequence
+            in one command (recommended); this form is the manual path.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>Rake (bps)</label>

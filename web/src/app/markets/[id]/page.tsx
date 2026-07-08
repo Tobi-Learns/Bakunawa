@@ -8,8 +8,9 @@
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
-import { BetSlip } from "@/components/bet-slip";
 import { Countdown } from "@/components/countdown";
+import { PredictionSlip } from "@/components/prediction-slip";
+import { TradeWidget } from "@/components/trade-widget";
 import { HonestyTip } from "@/components/honesty-tip";
 import { Ladder } from "@/components/ladder";
 import { StatusPill } from "@/components/status-pill";
@@ -124,7 +125,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           </div>
           {liveBanked !== null && liveBanked > 0n && (
             <p className="mt-2 text-amber-400">
-              🌒 {formatUsdc(liveBanked)} USDC of failed conviction bets swallowed by the
+              🌒 {formatUsdc(liveBanked)} USDC of failed convictions swallowed by the
               pool, if settled now.
             </p>
           )}
@@ -176,7 +177,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           />
         ))}
         {status === "Open" && (
-          <BetSlip
+          <PredictionSlip
             market={market}
             ladder={ladder}
             selected={selected}
@@ -185,6 +186,12 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           />
         )}
       </div>
+
+      {status === "Open" && (
+        <div className="md:max-w-md">
+          <TradeWidget market={market} />
+        </div>
+      )}
 
       <p className="text-xs text-neutral-600">
         Every number on this page is computed in your browser from on-chain pool state

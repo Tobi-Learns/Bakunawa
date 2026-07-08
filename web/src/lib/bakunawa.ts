@@ -54,6 +54,8 @@ export interface MarketView {
   baseline: bigint;
   rakeBps: number;
   minPool: bigint;
+  ticketA: string; // side-0 ticket SAC (classic asset held in contract custody)
+  ticketB: string; // side-1 ticket SAC
   status: "Open" | "Settled" | "Cancelled";
 }
 
@@ -110,8 +112,20 @@ export async function getMarket(id: bigint | number): Promise<MarketView> {
     baseline: m.baseline as bigint,
     rakeBps: Number(m.rake_bps),
     minPool: m.min_pool as bigint,
+    ticketA: String(m.ticket_a),
+    ticketB: String(m.ticket_b),
     status: enumName(m.status) as MarketView["status"],
   };
+}
+
+/** Ticket balance of `holder` for one side of a market (SAC read). */
+export async function getTicketBalance(
+  market: MarketView,
+  side: number,
+  holder: string,
+): Promise<bigint> {
+  const sac = side === 0 ? market.ticketA : market.ticketB;
+  return (await simulateRead(sac, "balance", addr(holder))) as bigint;
 }
 
 export async function getLadder(id: bigint | number): Promise<LadderRowView[]> {
@@ -186,17 +200,35 @@ export async function buildTxXdr(
   return rpc.assembleTransaction(tx, sim).build().toXDR();
 }
 
-export function buildPlaceBetXdr(
-  bettor: string,
+/** REGULAR prediction: par-mint tradable pool tickets (v4). */
+export function buildMintTicketsXdr(
+  predictor: string,
+  id: bigint | number,
+  side: number,
+  amount: bigint,
+): Promise<string> {
+  return buildTxXdr(
+    predictor,
+    "mint_tickets",
+    addr(predictor),
+    u64(id),
+    u32(side),
+    i128(amount),
+  );
+}
+
+/** CONVICTION: locked, all-or-nothing, rung >= 1 (v4). */
+export function buildConvictionXdr(
+  predictor: string,
   id: bigint | number,
   side: number,
   rung: number,
   amount: bigint,
 ): Promise<string> {
   return buildTxXdr(
-    bettor,
-    "place_bet",
-    addr(bettor),
+    predictor,
+    "place_conviction",
+    addr(predictor),
     u64(id),
     u32(side),
     u32(rung),
@@ -204,23 +236,39 @@ export function buildPlaceBetXdr(
   );
 }
 
-export function buildClaimXdr(bettor: string, id: bigint | number): Promise<string> {
-  return buildTxXdr(bettor, "claim", addr(bettor), u64(id));
+/** Redeem held tickets after settlement (winning side) or cancellation (par). */
+export function buildRedeemXdr(
+  holder: string,
+  id: bigint | number,
+  side: number,
+  amount: bigint,
+): Promise<string> {
+  return buildTxXdr(holder, "redeem", addr(holder), u64(id), u32(side), i128(amount));
+}
+
+/** Conviction claim (winnings, or refunds on a cancelled market). */
+export function buildClaimXdr(predictor: string, id: bigint | number): Promise<string> {
+  return buildTxXdr(predictor, "claim", addr(predictor), u64(id));
 }
 
 /**
- * Trustline auto-setup (StellarPay pattern): checks Horizon for the test-USDC
- * trustline; returns a CHANGE_TRUST XDR to sign if missing, null if present.
- * Sign + submit this before the first place_bet from a fresh wallet.
+ * Trustline auto-setup (StellarPay pattern): checks Horizon for a classic
+ * asset trustline; returns a CHANGE_TRUST XDR to sign if missing, null if
+ * present. Used for USDC (first stake) and for ticket assets (first mint /
+ * DEX buy of a market's tickets).
  */
-export async function buildTrustlineXdr(address: string): Promise<string | null> {
+export async function buildAssetTrustlineXdr(
+  address: string,
+  code: string,
+  issuer: string,
+): Promise<string | null> {
   const res = await fetch(`${CONFIG.horizonUrl}/accounts/${address}`);
   if (!res.ok) throw new Error(`account not found on testnet (fund it first)`);
   const account = (await res.json()) as {
     balances: { asset_code?: string; asset_issuer?: string }[];
   };
   const has = account.balances.some(
-    (b) => b.asset_code === "USDC" && b.asset_issuer === CONFIG.usdcIssuer,
+    (b) => b.asset_code === code && b.asset_issuer === issuer,
   );
   if (has) return null;
   const source = await server.getAccount(address);
@@ -228,12 +276,19 @@ export async function buildTrustlineXdr(address: string): Promise<string | null>
     fee: BASE_FEE,
     networkPassphrase: CONFIG.networkPassphrase,
   })
-    .addOperation(
-      Operation.changeTrust({ asset: new Asset("USDC", CONFIG.usdcIssuer) }),
-    )
+    .addOperation(Operation.changeTrust({ asset: new Asset(code, issuer) }))
     .setTimeout(120)
     .build()
     .toXDR();
+}
+
+export function buildTrustlineXdr(address: string): Promise<string | null> {
+  return buildAssetTrustlineXdr(address, "USDC", CONFIG.usdcIssuer);
+}
+
+/** Ticket asset code convention from the listing script: BK<id>A / BK<id>B. */
+export function ticketAssetCode(id: bigint | number, side: number): string {
+  return `BK${id}${side === 0 ? "A" : "B"}`;
 }
 
 export function explorerTxUrl(hash: string): string {

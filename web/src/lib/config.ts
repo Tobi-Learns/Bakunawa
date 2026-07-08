@@ -4,7 +4,9 @@
 export const CONFIG = {
   contractId:
     process.env.NEXT_PUBLIC_BAKUNAWA_CONTRACT_ID ??
-    "CDH2FL75ARKYA2VRZIJ26JXWB743JG4C4DKUPRSQWMTTDI6WLJ7MXHFY",
+    "CCUS5YZFEFUBOFNTBEGXZ7XY72JKR6DXKOO542S5EUE6F7UIL25FMLBU", // v4 (tickets)
+  // Ticket assets are issued by the `issuer` identity (classic assets BK<id>A/B)
+  ticketIssuer: "GDE4WALPGYAWMBBTYUUMRH5CLM3GJWQAUYXAT4HQ7WEXDMOOUGU33Q5B",
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "https://soroban-testnet.stellar.org",
   networkPassphrase: "Test SDF Network ; September 2015",
   horizonUrl: "https://horizon-testnet.stellar.org",

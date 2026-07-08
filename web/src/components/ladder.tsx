@@ -19,7 +19,7 @@ function fmtRoi(roi: number): string {
 }
 
 function rungLabel(market: MarketView, rung: number): string {
-  if (rung === 0) return "Winner only";
+  if (rung === 0) return "Regular · tickets";
   if (market.oracle === "Reflector") return `≥ ${(rung / 100).toFixed(2)}%`;
   return `≥ ${rung}`;
 }
