@@ -17,6 +17,27 @@ import { CONFIG } from "./config";
 const server = new rpc.Server(CONFIG.rpcUrl);
 const contract = new Contract(CONFIG.contractId);
 
+/** Generic read-only view on any contract via simulation (no signing). */
+export async function simulateRead(
+  contractId: string,
+  method: string,
+  ...args: xdr.ScVal[]
+): Promise<unknown> {
+  const account = await server.getAccount(CONFIG.readSource);
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: CONFIG.networkPassphrase,
+  })
+    .addOperation(new Contract(contractId).call(method, ...args))
+    .setTimeout(60)
+    .build();
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    throw new Error(`${method} simulation failed`);
+  }
+  return scValToNative(sim.result.retval);
+}
+
 // --- Types mirrored from contracts/bakunawa/src/types.rs ---
 
 export interface MarketView {
@@ -64,20 +85,8 @@ function enumName(v: unknown): string {
 
 // --- Reads (simulation only, no signing) ---
 
-async function readView(method: string, ...args: xdr.ScVal[]): Promise<unknown> {
-  const account = await server.getAccount(CONFIG.readSource);
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: CONFIG.networkPassphrase,
-  })
-    .addOperation(contract.call(method, ...args))
-    .setTimeout(60)
-    .build();
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
-    throw new Error(`${method} simulation failed`);
-  }
-  return scValToNative(sim.result.retval);
+function readView(method: string, ...args: xdr.ScVal[]): Promise<unknown> {
+  return simulateRead(CONFIG.contractId, method, ...args);
 }
 
 const u64 = (v: bigint | number) => nativeToScVal(BigInt(v), { type: "u64" });

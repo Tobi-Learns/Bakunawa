@@ -22,7 +22,7 @@ export default function HowItWorksPage() {
           as you. Picking a rarely-backed margin earns a bigger multiplier — priced
           entirely by where the crowd put its money, self-balancing as stakes move.
         </p>
-        <p>
+        <p id="multiplier-vs-odds" className="scroll-mt-20">
           <b>A multiplier is a relative weight, never fixed odds.</b> When a long shot
           lands, everyone below it on the same side also wins and shares the pool. That
           is why every rung shows a live <i>&quot;if settled now&quot;</i> payout instead
