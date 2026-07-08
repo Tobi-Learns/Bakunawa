@@ -67,7 +67,7 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
   type NewPos = {
     id: string;
     marketId: bigint;
-    bettor: string;
+    predictor: string;
     side: number;
     rung: number;
     stake: bigint;
@@ -115,7 +115,7 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
           positions.push({
             id: e.id,
             marketId,
-            bettor: String(topics[2]),
+            predictor: String(topics[2]),
             side,
             rung,
             stake,
