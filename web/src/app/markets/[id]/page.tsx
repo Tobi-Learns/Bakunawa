@@ -13,6 +13,7 @@ import { CrowdForecast } from "@/components/crowd-forecast";
 import { MarketCharts } from "@/components/market-charts";
 import { PredictionSlip } from "@/components/prediction-slip";
 import { TradeWidget } from "@/components/trade-widget";
+import { WinProbabilityCard } from "@/components/win-probability-card";
 import { HonestyTip } from "@/components/honesty-tip";
 import { Ladder } from "@/components/ladder";
 import { StatusPill } from "@/components/status-pill";
@@ -158,7 +159,10 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* Crowd forecast — the headline (inverted from pool state) */}
+      {/* Win probability over time — the headline visual, top of the page */}
+      <WinProbabilityCard market={market} />
+
+      {/* Crowd forecast — current snapshot (inverted from pool state) */}
       {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}
 
       {/* Ladder + prediction slip */}
