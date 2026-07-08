@@ -22,7 +22,7 @@ import {
   type MarketView,
 } from "@/lib/bakunawa";
 import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
-import { demandMult, impliedRoi } from "@/lib/parimutuel";
+import { demandMult, impliedRange } from "@/lib/parimutuel";
 import { recordPositionMeta } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
 import { HonestyTip } from "./honesty-tip";
@@ -62,11 +62,14 @@ export function PredictionSlip({
     }
   }, [stakeText]);
 
-  const quote = useMemo(() => {
+  const range = useMemo(() => {
     if (stake <= 0n) return null;
-    return impliedRoi(ladder, selected.side, selected.rung, market.rakeBps, stake);
-  }, [ladder, selected, market.rakeBps, stake]);
+    return impliedRange(ladder, selected.side, selected.rung, market.rungs, market.rakeBps, stake);
+  }, [ladder, selected, market.rungs, market.rakeBps, stake]);
   const mult = demandMult(ladder, selected.side, selected.rung);
+  const payoutAt = (roi: number) =>
+    formatUsdc(stake + BigInt(Math.floor(Number(stake) * roi)));
+  const rangePoint = range !== null && Math.abs(range.max - range.min) < 0.005;
 
   const sideName = (s: number) => (s === 0 ? market.sideA : market.sideB);
   const rungLabel = (rung: number) =>
@@ -103,7 +106,7 @@ export function PredictionSlip({
         }
       }
       setPhase({ step: "busy", what: "Sign in Freighter…" });
-      const entryRoi = quote ?? 0;
+      const entryRoi = range?.max ?? 0; // conviction at-threshold quote (recorded for convictions only)
       const xdr =
         mode === "prediction"
           ? await buildMintTicketsXdr(address, BigInt(market.id), selected.side, stake)
@@ -222,21 +225,31 @@ export function PredictionSlip({
           <span className="tabular-nums">×{mult ? mult.toFixed(2) : "—"}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-neutral-400">If settled now</span>
+          <span className="text-neutral-400">If your side wins</span>
           <span className="font-medium text-emerald-400 tabular-nums">
-            {quote === null ? "—" : `+${(quote * 100).toFixed(1)}%`}
+            {range === null
+              ? "—"
+              : rangePoint
+                ? `+${(range.max * 100).toFixed(1)}%`
+                : `+${(range.min * 100).toFixed(0)}% to +${(range.max * 100).toFixed(0)}%`}
           </span>
         </div>
         <div className="flex justify-between text-neutral-500">
           <span>Potential payout</span>
           <span className="tabular-nums">
-            {quote === null
+            {range === null
               ? "—"
-              : `${formatUsdc(stake + BigInt(Math.floor(Number(stake) * quote)))} USDC`}
+              : rangePoint
+                ? `${payoutAt(range.max)} USDC`
+                : `${payoutAt(range.min)} – ${payoutAt(range.max)} USDC`}
           </span>
         </div>
         <p className="mt-1.5 text-xs text-neutral-600">
-          Quote includes your stake; the pool reprices as money moves.
+          {rangePoint
+            ? "Quote includes your stake; the pool reprices as money moves."
+            : selected.rung === 0
+              ? "The range is the honest bracket: you earn the high end when convictions on your side die (banked into the pool), the low end when they land and take their cut."
+              : "The range spans the final margin: the high end if your side wins by just your margin, the low end if deeper convictions also land."}
         </p>
       </div>
 

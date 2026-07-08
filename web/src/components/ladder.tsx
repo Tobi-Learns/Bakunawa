@@ -11,7 +11,7 @@
 import type { LadderRowView, MarketView, OutcomeView } from "@/lib/bakunawa";
 import { formatUsdc } from "@/lib/config";
 import type { UiStatus } from "@/lib/market-status";
-import { impliedRoi, outcomeRung, type RungState } from "@/lib/parimutuel";
+import { impliedRange, outcomeRung, type RungState } from "@/lib/parimutuel";
 import type { LiveMove } from "@/lib/reflector";
 
 function fmtRoi(roi: number): string {
@@ -76,12 +76,15 @@ export function Ladder({
       ) : (
         <span className="text-neutral-700">—</span>
       );
-    // Open (or locked without a live feed): marginal-$1 implied payout
-    const roi = impliedRoi(ladder, side, rung, market.rakeBps);
-    return roi === null ? (
-      <span className="text-neutral-700">—</span>
-    ) : (
-      <span className="text-neutral-200">{fmtRoi(roi)}</span>
+    // Open (or locked without a live feed): the implied-payout RANGE — a
+    // position's return depends on how many same-side convictions land vs die.
+    const range = impliedRange(ladder, side, rung, market.rungs, market.rakeBps);
+    if (range === null) return <span className="text-neutral-700">—</span>;
+    const point = Math.abs(range.max - range.min) < 0.005;
+    return (
+      <span className="text-neutral-200 tabular-nums">
+        {point ? fmtRoi(range.max) : `${fmtRoi(range.min)} – ${fmtRoi(range.max)}`}
+      </span>
     );
   };
 
