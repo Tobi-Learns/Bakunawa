@@ -41,17 +41,19 @@ export default function Home() {
       <section className="flex flex-col items-center gap-8 text-center md:flex-row md:text-left">
         <EclipseHero />
         <div className="flex flex-col gap-5">
+          <span className="text-xs font-medium uppercase tracking-widest text-[var(--baku-serpent)]">
+            Dominance prediction market · Stellar
+          </span>
           <h1 className="max-w-2xl text-4xl font-bold leading-tight">
-            Forecast the winner <span className="text-neutral-500">and</span> the margin
-            of victory.
+            Forecast the winner <span className="text-neutral-500">—</span> and how big.
           </h1>
+          <p className="max-w-xl text-lg text-neutral-300">
+            The prediction market that rewards conviction: the bolder your call, the
+            bigger your share when it lands.
+          </p>
           <p className="max-w-xl text-neutral-400">
-            One shared pool per event, two ways in:{" "}
-            <span className="text-neutral-200">tradable regular predictions</span> (exit
-            anytime at live market prices) and{" "}
-            <span className="text-neutral-200">locked all-or-nothing convictions</span>{" "}
-            that pay more the rarer the call. Priced by the crowd, settled trustlessly on
-            Stellar.
+            Trade in and out at live prices, or lock a dominance call and let the rarest
+            correct forecast take the biggest cut.
           </p>
           <p className="max-w-xl text-sm text-[var(--baku-serpent)]">
             Named for the serpent that swallows the moon — the pool swallows every failed
