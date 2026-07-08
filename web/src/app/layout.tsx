@@ -36,8 +36,8 @@ export default function RootLayout({
           <Header />
           <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
           <footer className="border-t border-neutral-800 py-4 text-center text-xs text-neutral-500">
-            Bakunawa · dominance parimutuel on Stellar testnet · multipliers are
-            relative weights, never fixed odds
+            Bakunawa · dominance prediction market on Stellar testnet · multipliers
+            are relative weights, never fixed odds
           </footer>
         </WalletProvider>
       </body>

@@ -3,7 +3,7 @@
 // locked design rule: no trust in our backend for the number that matters.
 //
 // DemandMult(m) = SideStake / S(m); Weight = Stake x Mult;
-// Payout_i = Stake_i + Weight_i / SumW x (LosingPool - Rake).
+// Payout_i = Stake_i + Weight_i / SumW x (LosingPool - Fee).
 
 export interface LadderRow {
   side: number;
@@ -28,10 +28,10 @@ export function demandMult(rows: LadderRow[], side: number, rung: number): numbe
 const EPS = 10_000_000;
 
 /**
- * "If settled now" ROI for a probe bet on (side, rung), assuming the outcome
+ * "If settled now" ROI for a probe stake on (side, rung), assuming the outcome
  * is side winning by exactly `rung` (the minimal outcome where this rung
  * wins). The probe is included in S(m)/SideStake, so quoting a big stake
- * prices itself down — the bet slip passes the user's actual stake here.
+ * prices itself down — the prediction slip passes the user's actual stake here.
  * Returns null when the pool has no defined price yet.
  */
 export function impliedRoi(

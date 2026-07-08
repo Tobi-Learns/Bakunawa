@@ -178,7 +178,7 @@ export default function NewEventPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={label}>Betting locks (local time)</label>
+              <label className={label}>Predictions lock (local time)</label>
               <input type="datetime-local" className={input} value={form.close} onChange={(e) => set("close", e.target.value)} required />
             </div>
             <div>
@@ -203,7 +203,7 @@ export default function NewEventPage() {
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={label}>Rake (bps)</label>
+              <label className={label}>Protocol fee (bps)</label>
               <input type="number" className={input} value={form.rakeBps} onChange={(e) => set("rakeBps", Number(e.target.value))} min={0} max={10000} />
             </div>
             <div>

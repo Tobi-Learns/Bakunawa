@@ -178,7 +178,7 @@ export default function PositionPage({
               market.oracle === "Reflector"
                 ? `${(outcome.margin / 100).toFixed(2)}%`
                 : outcome.margin
-            } · losing pool ${formatUsdc(outcome.losingPool)} USDC · rake ${formatUsdc(outcome.rakeAmount)} USDC`,
+            } · losing pool ${formatUsdc(outcome.losingPool)} USDC · fee ${formatUsdc(outcome.rakeAmount)} USDC`,
           )}
       </div>
 

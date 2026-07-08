@@ -2,7 +2,7 @@
 
 // Ticket trading (v4, 1.8e) — buy/sell a market's side tickets against USDC
 // on Stellar's NATIVE DEX (tickets are ordinary classic assets; trades move
-// the claim, never the pot's cash). Shows the top of the order book; offers
+// the claim, never the pool's cash). Shows the top of the order book; offers
 // are classic manage-offer ops signed by the connected wallet.
 // v1 rule: the widget disappears at lock. (On-chain the classic DEX cannot be
 // halted — post-lock trading is merely unsupported in the UI, noted in docs.)
@@ -174,7 +174,7 @@ export function TradeWidget({ market }: { market: MarketView }) {
       </button>
       <p className="mt-2 text-xs text-neutral-600">
         Ticket price ≈ the crowd&apos;s live winner forecast. Trades transfer the claim —
-        the pot itself never moves before settlement.
+        the pool itself never moves before settlement.
       </p>
       {msg && (
         <p className={`mt-2 text-sm ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>

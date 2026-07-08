@@ -1,7 +1,7 @@
 import type { MarketView } from "./bakunawa";
 
 /** UI lifecycle derived from on-chain status + the clock.
- *  Open -> Locked (betting closed, event under way) -> Settling (awaiting
+ *  Open -> Locked (predictions closed, event under way) -> Settling (awaiting
  *  oracle trigger) -> Settled / Cancelled. */
 export type UiStatus = "Open" | "Locked" | "Settling" | "Settled" | "Cancelled";
 

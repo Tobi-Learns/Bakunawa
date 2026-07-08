@@ -4,7 +4,7 @@
 // implied payouts polled from chain, lock countdown, live-move banner for
 // crypto markets after lock (dominance deaths banking "if settled now" —
 // the Bakunawa moment), settled breakdown, cancelled refunds notice.
-// Bet slip attaches here in Phase 1.5 (the ladder already exposes onSelect).
+// Prediction slip attaches here (the ladder already exposes onSelect).
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
@@ -72,7 +72,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
             {market.oracle === "Reflector"
               ? `% move from the listing snapshot · settled trustlessly by Reflector`
               : "curated event · result posted from the named official source"}{" "}
-            · demand priced · rake {market.rakeBps / 100}% · <HonestyTip />
+            · demand priced · fee {market.rakeBps / 100}% · <HonestyTip />
           </p>
         </div>
         <div className="text-right">
@@ -87,7 +87,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
       {status === "Open" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-900 bg-emerald-950/30 px-4 py-3 text-sm">
           <span>
-            Betting open — locks in{" "}
+            Predictions open — lock in{" "}
             <b>
               <Countdown to={market.closeTs} />
             </b>{" "}
@@ -102,7 +102,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
         <div className="rounded-lg border border-violet-900 bg-violet-950/30 px-4 py-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
-              Betting closed —{" "}
+              Predictions locked —{" "}
               {status === "Settling" ? (
                 "awaiting oracle settlement"
               ) : (
@@ -141,7 +141,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
               ? `${(outcome.margin / 100).toFixed(2)}%`
               : outcome.margin}
           </b>{" "}
-          · losing pool {formatUsdc(outcome.losingPool)} USDC · rake{" "}
+          · losing pool {formatUsdc(outcome.losingPool)} USDC · fee{" "}
           {formatUsdc(outcome.rakeAmount)} USDC · winners claim from{" "}
           <Link href="/portfolio" className="underline">
             portfolio
@@ -150,7 +150,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
       )}
       {status === "Cancelled" && (
         <div className="rounded-lg border border-neutral-700 bg-neutral-900/60 px-4 py-3 text-sm">
-          Market cancelled — all stakes refundable in full, no rake. Claim from{" "}
+          Market cancelled — all stakes refundable in full, no fee. Claim from{" "}
           <Link href="/portfolio" className="underline">
             portfolio
           </Link>
@@ -161,7 +161,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
       {/* Crowd forecast — the headline (inverted from pool state) */}
       {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}
 
-      {/* Ladder + bet slip */}
+      {/* Ladder + prediction slip */}
       <div
         className={`grid gap-6 ${status === "Open" ? "lg:grid-cols-3" : "md:grid-cols-2"}`}
         key={placedAt}

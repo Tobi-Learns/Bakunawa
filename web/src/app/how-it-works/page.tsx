@@ -23,7 +23,7 @@ export default function HowItWorksPage() {
       <Section title="One pool, two instruments">
         <p>
           Every market asks two questions: <b>who wins</b>, and <b>by how much</b>. Both
-          kinds of prediction share a single pot.
+          kinds of prediction share a single pool.
         </p>
         <p>
           A <b>regular prediction</b> backs just the winner. You mint tradable pool
@@ -48,7 +48,7 @@ export default function HowItWorksPage() {
         </p>
         <pre className="overflow-x-auto rounded border border-neutral-800 bg-neutral-900 px-4 py-3 text-xs">
           Weight = Stake × (SideStake / S(m)){"\n"}Payout = Stake + Weight / ΣWeights ×
-          (LosingPool − Rake)
+          (LosingPool − Fee)
         </pre>
         <p>
           Regular tickets carry weight 1.0. A conviction&apos;s multiplier is the inverse
