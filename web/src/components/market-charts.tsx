@@ -11,6 +11,7 @@ import {
   PoolChart,
   PriceChart,
   RungHistoryChart,
+  WinProbabilityChart,
   type SeriesPointDto,
 } from "./charts";
 
@@ -60,6 +61,21 @@ export function MarketCharts({ market }: { market: MarketView }) {
     <section className="flex flex-col gap-6">
       <h2 className="text-lg font-semibold">Charts</h2>
       <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-lg border border-neutral-800 p-4 lg:col-span-2">
+          <h3 className="mb-2 text-sm font-medium text-neutral-300">
+            Win probability{" "}
+            <span className="font-normal text-neutral-600">· crowd forecast over time</span>
+          </h3>
+          {series ? (
+            <WinProbabilityChart
+              points={series.points}
+              sideA={series.sideA}
+              sideB={series.sideB}
+            />
+          ) : (
+            <p className="text-xs text-neutral-600">Loading…</p>
+          )}
+        </div>
         <div className="rounded-lg border border-neutral-800 p-4">
           <h3 className="mb-2 text-sm font-medium text-neutral-300">Pool growth</h3>
           {series ? (

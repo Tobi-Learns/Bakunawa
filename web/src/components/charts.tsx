@@ -219,6 +219,106 @@ export interface SeriesPointDto {
   t: number;
   pool: string;
   quotes: { side: number; rung: number; roi: number | null }[];
+  win: { side: number; p: number }[];
+}
+
+// --- 0. Win probability (the Polymarket-style headline: two sides over time) ---
+
+// Two categorical hues (dark-surface slots 1 blue + 2 aqua) — identity also
+// carried by legend + direct end labels + table, never color alone.
+const SIDE_COLORS = ["#3987e5", "#199e70"];
+
+export function WinProbabilityChart({
+  points,
+  sideA,
+  sideB,
+}: {
+  points: SeriesPointDto[];
+  sideA: string;
+  sideB: string;
+}) {
+  const series = useMemo(
+    () =>
+      [0, 1].map((side) => ({
+        side,
+        name: side === 0 ? sideA : sideB,
+        color: SIDE_COLORS[side],
+        pts: points.map((p) => ({
+          t: p.t,
+          v: (p.win?.find((w) => w.side === side)?.p ?? 0) * 100,
+        })),
+      })),
+    [points, sideA, sideB],
+  );
+  const scale = useMemo(
+    () => (points.length ? makeScale(points.map((p) => p.t), [0, 100], 0) : null),
+    [points],
+  );
+  const { idx, ref, onMove, onLeave } = useCrosshair(points.map((p) => p.t), scale);
+
+  if (!scale || points.length === 0)
+    return (
+      <p className="text-xs text-neutral-600">
+        No predictions yet — the forecast starts with the first entry.
+      </p>
+    );
+  const lead = idx ?? points.length - 1;
+
+  return (
+    <div className="relative">
+      <div className="mb-2 flex flex-wrap gap-4 text-sm">
+        {series.map((s) => (
+          <span key={s.side} className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} />
+            <span className="text-neutral-300">{s.name}</span>
+            <span className="font-semibold tabular-nums">{s.pts[lead].v.toFixed(0)}%</span>
+          </span>
+        ))}
+      </div>
+      {idx !== null && (
+        <Tooltip
+          x={scale.x(points[idx].t)}
+          lines={[
+            fmtTime(points[idx].t, scale.t1 - scale.t0),
+            ...series.map((s) => `${s.name}: ${s.pts[idx].v.toFixed(0)}%`),
+          ]}
+        />
+      )}
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} className="w-full" onPointerMove={onMove} onPointerLeave={onLeave}>
+        <Frame scale={scale} yFmt={(v) => `${v.toFixed(0)}%`}>
+          {series.map((s) => (
+            <path key={s.side} d={stepPath(s.pts, scale)} fill="none" stroke={s.color} strokeWidth={2} />
+          ))}
+          {(() => {
+            // nudge apart when the two lines end at (nearly) the same value
+            const endY = series.map((s) => scale.y(s.pts[s.pts.length - 1].v));
+            const collide = Math.abs(endY[0] - endY[1]) < 11;
+            return series.map((s) => (
+              <text
+                key={`l${s.side}`}
+                x={W - PAD.r + 4}
+                y={endY[s.side] + (collide ? (s.side === 0 ? -4 : 8) : 3)}
+                fontSize={9}
+                fill={s.color}
+              >
+                {s.name}
+              </text>
+            ));
+          })()}
+          {idx !== null && (
+            <line x1={scale.x(points[idx].t)} x2={scale.x(points[idx].t)} y1={PAD.t} y2={H - PAD.b} stroke="#525252" strokeWidth={1} />
+          )}
+        </Frame>
+      </svg>
+      <DataTable
+        head={["Time", ...series.map((s) => s.name)]}
+        rows={points.map((p, i) => [
+          new Date(p.t * 1000).toLocaleString(),
+          ...series.map((s) => `${s.pts[i].v.toFixed(0)}%`),
+        ])}
+      />
+    </div>
+  );
 }
 
 export function RungHistoryChart({
