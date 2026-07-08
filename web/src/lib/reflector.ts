@@ -18,6 +18,34 @@ export interface LiveMove {
 const assetScVal = (symbol: string) =>
   xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("Other"), xdr.ScVal.scvSymbol(symbol)]);
 
+export interface PricePoint {
+  price: bigint;
+  timestamp: number;
+}
+
+/** Latest feed price for an asset (raw). */
+export async function getLastPrice(asset: string): Promise<PricePoint | null> {
+  const res = (await simulateRead(
+    CONFIG.reflectorFeed,
+    "lastprice",
+    assetScVal(asset),
+  )) as { price: bigint; timestamp: bigint } | null;
+  return res ? { price: res.price, timestamp: Number(res.timestamp) } : null;
+}
+
+/** Historical feed price at a resolution-aligned timestamp (retention-bound). */
+export async function getPriceAt(asset: string, ts: number): Promise<PricePoint | null> {
+  const res = (await simulateRead(
+    CONFIG.reflectorFeed,
+    "price",
+    assetScVal(asset),
+    xdr.ScVal.scvU64(new xdr.Uint64(BigInt(ts))),
+  )) as { price: bigint; timestamp: bigint } | null;
+  return res ? { price: res.price, timestamp: Number(res.timestamp) } : null;
+}
+
+export const FEED_RESOLUTION = 300; // seconds (verified on the testnet feed)
+
 export async function getLiveMove(
   asset: string,
   baseline: bigint,

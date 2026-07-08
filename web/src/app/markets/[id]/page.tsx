@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { Countdown } from "@/components/countdown";
+import { MarketCharts } from "@/components/market-charts";
 import { PredictionSlip } from "@/components/prediction-slip";
 import { TradeWidget } from "@/components/trade-widget";
 import { HonestyTip } from "@/components/honesty-tip";
@@ -192,6 +193,8 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           <TradeWidget market={market} />
         </div>
       )}
+
+      <MarketCharts market={market} />
 
       <p className="text-xs text-neutral-600">
         Every number on this page is computed in your browser from on-chain pool state

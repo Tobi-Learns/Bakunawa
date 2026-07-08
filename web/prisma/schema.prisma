@@ -73,3 +73,16 @@ model IndexerCursor {
 
   @@map("BakunawaCursor")
 }
+
+/// Reflector price samples (1.9c) — written by the indexer cron for every
+/// asset with an open Reflector market, plus on-demand backfill from the
+/// feed's price(ts) history. Timestamps are aligned to the feed resolution.
+model PriceSample {
+  id    String @id // `${asset}-${ts}`
+  asset String
+  ts    Int
+  price String // i128 stroops-of-14dp as string
+
+  @@index([asset, ts])
+  @@map("BakunawaPriceSample")
+}
