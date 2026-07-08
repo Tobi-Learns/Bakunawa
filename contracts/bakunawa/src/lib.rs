@@ -1,20 +1,25 @@
-//! Bakunawa — dominance parimutuel market contract.
+//! Bakunawa — dominance parimutuel market contract (v4).
 //!
-//! One shared pool per market. Bets are (side, margin rung, stake); a bet wins
-//! iff its side wins AND actual margin >= rung (exact hit wins). Losing stakes
-//! (wrong side or unmet margin) fund winners:
+//! One shared pool per market, two instrument classes:
+//! - REGULAR predictions: par-minted per-side ticket tokens (classic assets
+//!   pre-minted into this contract's custody at listing) — freely tradable on
+//!   the DEX; trades move claims, never cash; settlement pays whoever HOLDS
+//!   tickets, via `redeem`. Settlement weight = stake (multiplier 1.0).
+//! - CONVICTIONS: winner + minimum margin, locked at entry, all-or-nothing;
+//!   wins iff correct side AND actual margin >= rung (exact hit wins).
+//!   Settlement weight = Stake * SideStake / S(rung)  (DemandMult, per S7).
 //!
-//!   Weight_i  = Stake_i * SideStake / S(rung_i)      (DemandMult, per S7)
-//!   Payout_i  = Stake_i + Weight_i / SumW * (LosingPool - Rake)
+//!   Payout_i = Stake_i + Weight_i / SumW * (LosingPool - Rake)
 //!
-//! S(m) = total stake on the bettor's side at threshold >= m (own included),
-//! from pool composition at lock — never the outcome. Rake (S1: 3%) comes off
-//! the losing pool at settlement. Payouts are pull-based claims; the contract
-//! holds no authority to move funds except through settlement logic.
-//! Integer division dust stays in the contract (bounded by winner count).
+//! S(m) = conviction stake on the side at threshold >= m; SideStake = regular
+//! + conviction stake — both from pool composition at lock, never the
+//! outcome. Rake (S1: 3%) comes off the losing pool at settlement. All
+//! payouts are pull-based; the contract holds no authority to move funds
+//! except through settlement logic. Integer dust stays in the contract.
 //!
 //! Reference implementation: sim/engine.py — test.rs replicates the
-//! hand-settled worked example against this contract exactly.
+//! hand-settled worked example against this contract exactly (v4 restores
+//! the v2 settlement math, so the numbers are unchanged).
 
 #![no_std]
 
@@ -105,6 +110,8 @@ impl Bakunawa {
             baseline,
             rake_bps: params.rake_bps,
             min_pool: params.min_pool,
+            ticket_a: params.ticket_a,
+            ticket_b: params.ticket_b,
             status: MarketStatus::Open,
         };
         env.storage().persistent().set(&DataKey::Market(id), &market);
@@ -112,29 +119,55 @@ impl Bakunawa {
             .publish((Symbol::new(&env, "create"), id), baseline);
     }
 
-    /// Place a bet: side 0/1, rung 0 (winner-only) or a listed rung.
-    /// Stake transfers to this contract. Rejected at/after `close_ts` (S3).
-    pub fn place_bet(env: Env, bettor: Address, id: u64, side: u32, rung: u32, amount: i128) {
-        bettor.require_auth();
+    /// REGULAR prediction (v4): par-mint tradable pool tickets. `amount` USDC
+    /// enters the pot; the predictor receives `amount` side tickets 1:1 from
+    /// the contract's pre-minted custody. Tickets are ordinary classic assets
+    /// — trade them on the DEX; settlement pays whoever holds them (redeem).
+    /// Minting is rejected at/after `close_ts` (S3).
+    pub fn mint_tickets(env: Env, predictor: Address, id: u64, side: u32, amount: i128) {
+        predictor.require_auth();
         let market = get_market(&env, id);
-        if market.status != MarketStatus::Open {
-            panic_with_error!(&env, Error::MarketNotOpen);
-        }
-        if env.ledger().timestamp() >= market.close_ts {
-            panic_with_error!(&env, Error::BettingClosed);
-        }
-        if side > 1 {
-            panic_with_error!(&env, Error::InvalidSide);
-        }
-        if amount <= 0 {
-            panic_with_error!(&env, Error::InvalidAmount);
-        }
-        if rung != 0 && !market.rungs.contains(rung) {
+        require_open_entry(&env, &market, side, amount);
+
+        token::Client::new(&env, &stake_token(&env)).transfer(
+            &predictor,
+            &env.current_contract_address(),
+            &amount,
+        );
+        token::Client::new(&env, &ticket_for(&market, side)).transfer(
+            &env.current_contract_address(),
+            &predictor,
+            &amount,
+        );
+
+        let reg_key = DataKey::Regular(id, side);
+        let reg: i128 = env.storage().persistent().get(&reg_key).unwrap_or(0);
+        env.storage().persistent().set(&reg_key, &(reg + amount));
+        bump_side_stake(&env, id, side, amount);
+
+        env.events()
+            .publish((Symbol::new(&env, "mint"), id, predictor), (side, amount));
+    }
+
+    /// CONVICTION (v4): winner + minimum margin, locked at entry — no exit,
+    /// no transfer, all-or-nothing. Weighted by DemandMult at settlement.
+    pub fn place_conviction(
+        env: Env,
+        predictor: Address,
+        id: u64,
+        side: u32,
+        rung: u32,
+        amount: i128,
+    ) {
+        predictor.require_auth();
+        let market = get_market(&env, id);
+        require_open_entry(&env, &market, side, amount);
+        if rung == 0 || !market.rungs.contains(rung) {
             panic_with_error!(&env, Error::InvalidRung);
         }
 
         token::Client::new(&env, &stake_token(&env)).transfer(
-            &bettor,
+            &predictor,
             &env.current_contract_address(),
             &amount,
         );
@@ -142,11 +175,9 @@ impl Bakunawa {
         let agg_key = DataKey::Agg(id, side, rung);
         let agg: i128 = env.storage().persistent().get(&agg_key).unwrap_or(0);
         env.storage().persistent().set(&agg_key, &(agg + amount));
-        let ss_key = DataKey::SideStake(id, side);
-        let ss: i128 = env.storage().persistent().get(&ss_key).unwrap_or(0);
-        env.storage().persistent().set(&ss_key, &(ss + amount));
+        bump_side_stake(&env, id, side, amount);
 
-        let pos_key = DataKey::Pos(id, bettor.clone());
+        let pos_key = DataKey::Pos(id, predictor.clone());
         let mut positions: Vec<Position> = env
             .storage()
             .persistent()
@@ -160,8 +191,54 @@ impl Bakunawa {
         });
         env.storage().persistent().set(&pos_key, &positions);
 
+        env.events().publish(
+            (Symbol::new(&env, "conviction"), id, predictor),
+            (side, rung, amount),
+        );
+    }
+
+    /// Redeem winning-side tickets after settlement (or any side's at par
+    /// after cancellation). Pays whoever HOLDS the tickets — including buyers
+    /// on the DEX who never staked. Tickets return to contract custody.
+    pub fn redeem(env: Env, holder: Address, id: u64, side: u32, amount: i128) -> i128 {
+        holder.require_auth();
+        let market = get_market(&env, id);
+        if side > 1 {
+            panic_with_error!(&env, Error::InvalidSide);
+        }
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        let payout = match market.status {
+            MarketStatus::Open => panic_with_error!(&env, Error::NotSettled),
+            MarketStatus::Cancelled => amount, // par refund, no rake
+            MarketStatus::Settled => {
+                let outcome: Outcome = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::Outcome(id))
+                    .unwrap();
+                if side != outcome.winner {
+                    panic_with_error!(&env, Error::NothingToClaim);
+                }
+                let dist = outcome.losing_pool - outcome.rake_amount;
+                amount + amount * dist / outcome.sum_weights
+            }
+        };
+        // pull the tickets back into custody, pay from the pot
+        token::Client::new(&env, &ticket_for(&market, side)).transfer(
+            &holder,
+            &env.current_contract_address(),
+            &amount,
+        );
+        token::Client::new(&env, &stake_token(&env)).transfer(
+            &env.current_contract_address(),
+            &holder,
+            &payout,
+        );
         env.events()
-            .publish((Symbol::new(&env, "bet"), id, bettor), (side, rung, amount));
+            .publish((Symbol::new(&env, "redeem"), id, holder), (side, amount, payout));
+        payout
     }
 
     /// Admin-oracle settlement (MVP sports path): curator posts the result.
@@ -218,12 +295,13 @@ impl Bakunawa {
         cancel_inner(&env, market);
     }
 
-    /// Pull-based claim: pays out all of the caller's unclaimed winning
-    /// positions (Settled) or refunds all unclaimed stakes (Cancelled).
-    pub fn claim(env: Env, bettor: Address, id: u64) -> i128 {
-        bettor.require_auth();
+    /// Pull-based CONVICTION claim: pays out all of the caller's unclaimed
+    /// winning convictions (Settled) or refunds all unclaimed conviction
+    /// stakes (Cancelled). Regular tickets use `redeem` instead.
+    pub fn claim(env: Env, predictor: Address, id: u64) -> i128 {
+        predictor.require_auth();
         let market = get_market(&env, id);
-        let pos_key = DataKey::Pos(id, bettor.clone());
+        let pos_key = DataKey::Pos(id, predictor.clone());
         let positions: Vec<Position> = env
             .storage()
             .persistent()
@@ -269,11 +347,11 @@ impl Bakunawa {
         env.storage().persistent().set(&pos_key, &updated);
         token::Client::new(&env, &stake_token(&env)).transfer(
             &env.current_contract_address(),
-            &bettor,
+            &predictor,
             &payout,
         );
         env.events()
-            .publish((Symbol::new(&env, "claim"), id, bettor), payout);
+            .publish((Symbol::new(&env, "claim"), id, predictor), payout);
         payout
     }
 
@@ -290,7 +368,8 @@ impl Bakunawa {
             .unwrap_or_else(|| panic_with_error!(&env, Error::NotSettled))
     }
 
-    /// Full stake ladder: one row per (side, rung) including winner-only (0).
+    /// Full stake ladder: rung 0 = REGULAR (ticket-minted) stake per side,
+    /// higher rungs = conviction stakes.
     pub fn get_ladder(env: Env, id: u64) -> Vec<LadderRow> {
         let market = get_market(&env, id);
         let mut rows: Vec<LadderRow> = Vec::new(&env);
@@ -298,7 +377,7 @@ impl Bakunawa {
             rows.push_back(LadderRow {
                 side,
                 rung: 0,
-                stake: agg(&env, id, side, 0),
+                stake: regular(&env, id, side),
             });
             for r in market.rungs.iter() {
                 rows.push_back(LadderRow {
@@ -353,6 +432,42 @@ fn agg(env: &Env, id: u64, side: u32, rung: u32) -> i128 {
         .unwrap_or(0)
 }
 
+fn regular(env: &Env, id: u64, side: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Regular(id, side))
+        .unwrap_or(0)
+}
+
+fn ticket_for(market: &Market, side: u32) -> Address {
+    if side == 0 {
+        market.ticket_a.clone()
+    } else {
+        market.ticket_b.clone()
+    }
+}
+
+fn bump_side_stake(env: &Env, id: u64, side: u32, amount: i128) {
+    let key = DataKey::SideStake(id, side);
+    let ss: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+    env.storage().persistent().set(&key, &(ss + amount));
+}
+
+fn require_open_entry(env: &Env, market: &Market, side: u32, amount: i128) {
+    if market.status != MarketStatus::Open {
+        panic_with_error!(env, Error::MarketNotOpen);
+    }
+    if env.ledger().timestamp() >= market.close_ts {
+        panic_with_error!(env, Error::BettingClosed);
+    }
+    if side > 1 {
+        panic_with_error!(env, Error::InvalidSide);
+    }
+    if amount <= 0 {
+        panic_with_error!(env, Error::InvalidAmount);
+    }
+}
+
 /// S(m): total stake on `side` at threshold >= m (rung 0 => whole side).
 fn s_of(env: &Env, market: &Market, side: u32, m: u32) -> i128 {
     if m == 0 {
@@ -401,14 +516,15 @@ fn settle_inner(env: &Env, mut market: Market, winner: u32, margin: u32) {
         return;
     }
 
-    // Winning weights: rung 0 plus every listed rung <= margin.
-    // Weight(r) = Agg(r) * WinnerStake / S(r)  (DemandMult, integer floor).
+    // Winning weights: REGULAR stake at multiplier 1.0 plus every winning
+    // conviction rung. Conviction Weight(r) = Agg(r) * WinnerStake / S(r)
+    // (DemandMult, integer floor).
     let mut sum_weights: i128 = 0;
     let mut winning_stake_total: i128 = 0;
-    let a0 = agg(env, id, winner, 0);
-    if a0 > 0 {
-        sum_weights += a0; // S(0) == winner_stake => weight == stake
-        winning_stake_total += a0;
+    let reg = regular(env, id, winner);
+    if reg > 0 {
+        sum_weights += reg;
+        winning_stake_total += reg;
     }
     for r in market.rungs.iter() {
         if r <= margin {

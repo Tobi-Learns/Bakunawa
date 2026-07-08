@@ -8,9 +8,10 @@ export default function Home() {
         margin of victory.
       </h1>
       <p className="max-w-xl text-neutral-400">
-        One shared parimutuel pool per event. All-or-nothing dominance bets,
-        transparently priced by the crowd, settled trustlessly on Stellar. The
-        pool swallows every failed conviction bet — and grows.
+        One shared pool per event, two ways in: tradable regular predictions
+        (exit anytime, live DEX prices) and locked all-or-nothing dominance
+        convictions that pay more the rarer the call. Settled trustlessly on
+        Stellar. The pool swallows every failed conviction — and grows.
       </p>
       <div className="flex gap-3">
         <Link

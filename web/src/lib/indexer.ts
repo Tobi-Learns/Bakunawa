@@ -30,6 +30,8 @@ export async function syncMarket(id: bigint): Promise<void> {
     rakeBps: market.rakeBps,
     minPool: market.minPool,
     baseline: market.baseline.toString(),
+    ticketA: market.ticketA,
+    ticketB: market.ticketB,
     status: market.status,
     pool,
     winner: outcome?.winner ?? null,
@@ -101,15 +103,21 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
         const kind = String(topics[0]);
         const marketId = BigInt(topics[1] as bigint | number | string);
         touched.add(marketId);
-        if (kind === "bet") {
-          const [side, rung, stake] = scValToNative(e.value) as [number, number, bigint];
+        // v4 entry events: "mint" (regular tickets, value (side, amount)) and
+        // "conviction" (value (side, rung, amount)). Both recorded as history
+        // rows; live regular exposure is the ticket balance, not this table.
+        if (kind === "mint" || kind === "conviction") {
+          const value = scValToNative(e.value) as (number | bigint)[];
+          const side = Number(value[0]);
+          const rung = kind === "mint" ? 0 : Number(value[1]);
+          const stake = BigInt(value[kind === "mint" ? 1 : 2]);
           positions.push({
             id: e.id,
             marketId,
             bettor: String(topics[2]),
-            side: Number(side),
-            rung: Number(rung),
-            stake: BigInt(stake),
+            side,
+            rung,
+            stake,
             txHash: e.txHash ?? "",
             ledger: e.ledger,
             at: new Date(e.ledgerClosedAt),

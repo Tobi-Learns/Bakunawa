@@ -27,6 +27,8 @@ model Market {
   rakeBps     Int
   minPool     BigInt   @default(0)
   baseline    String? // i128 as string
+  ticketA     String? // v4: side-0 ticket SAC
+  ticketB     String? // v4: side-1 ticket SAC
   status      String // on-chain: Open | Settled | Cancelled
   pool        BigInt   @default(0) // cached total staked (stroops)
   // outcome cache (Settled only)

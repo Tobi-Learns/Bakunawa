@@ -4,10 +4,12 @@ export default function HowItWorksPage() {
       <h1 className="text-2xl font-semibold">How Bakunawa works</h1>
       <section className="flex flex-col gap-3 text-sm leading-relaxed text-neutral-300">
         <p>
-          Every market asks two questions: <b>who wins</b>, and <b>by how much</b>. A
-          standard prediction backs just the winner. A <b>dominance prediction</b> backs
-          the winner plus a minimum margin — and wins only if the actual margin is at
-          least what you predicted (an exact hit wins).
+          Every market asks two questions: <b>who wins</b>, and <b>by how much</b>.
+          There are two ways into the shared pool. A <b>regular prediction</b> backs
+          just the winner and mints tradable pool tickets — sell anytime before lock on
+          the DEX; settlement pays whoever holds them. A <b>conviction</b> backs the
+          winner plus a minimum margin, locked at entry, all-or-nothing — and wins only
+          if the actual margin is at least what you predicted (an exact hit wins).
         </p>
         <p>
           All stakes share <b>one parimutuel pool</b>. Every losing stake — wrong winner
@@ -30,9 +32,9 @@ export default function HowItWorksPage() {
           than it holds.
         </p>
         <p>
-          Dominance bets that die mid-event stay <b>banked in the pool</b> until
-          settlement — never paid out early, because the dead bettor&apos;s own side may
-          still win. Watch the pool grow as convictions fail: that is the Bakunawa
+          Convictions that die mid-event stay <b>banked in the pool</b> until
+          settlement — never paid out early, because the dead predictor&apos;s own side
+          may still win. Watch the pool grow as convictions fail: that is the Bakunawa
           moment.
         </p>
         <p className="text-neutral-500">

@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS "BakunawaMarket" (
   "rakeBps"     INTEGER NOT NULL,
   "minPool"     BIGINT NOT NULL DEFAULT 0,
   "baseline"    TEXT,
+  "ticketA"     TEXT,
+  "ticketB"     TEXT,
   "status"      TEXT NOT NULL,
   "pool"        BIGINT NOT NULL DEFAULT 0,
   "winner"      INTEGER,
