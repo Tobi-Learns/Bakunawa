@@ -16,6 +16,29 @@ import { knownMarketIds } from "@/lib/markets-registry";
 interface Card {
   market: MarketView;
   pool: bigint;
+  title?: string;
+}
+
+/** Map a DB row (bigints serialized as strings) back to the card shape. */
+function cardFromApi(row: Record<string, unknown>): Card {
+  return {
+    market: {
+      id: BigInt(row.id as string),
+      sideA: row.sideA as string,
+      sideB: row.sideB as string,
+      rungs: row.rungs as number[],
+      closeTs: Number(row.closeTs),
+      settleTs: Number(row.settleTs),
+      oracle: row.oracle as MarketView["oracle"],
+      asset: (row.asset as string) ?? "",
+      baseline: BigInt((row.baseline as string) ?? "0"),
+      rakeBps: Number(row.rakeBps),
+      minPool: BigInt((row.minPool as string) ?? "0"),
+      status: row.status as MarketView["status"],
+    },
+    pool: BigInt((row.pool as string) ?? "0"),
+    title: (row.title as string) ?? undefined,
+  };
 }
 
 const STATUS_FILTERS: ("All" | UiStatus)[] = [
@@ -38,6 +61,24 @@ export default function MarketsPage() {
   useEffect(() => {
     let live = true;
     (async () => {
+      // Read-through: indexer-backed API first, direct chain reads as fallback
+      try {
+        const res = await fetch("/api/markets");
+        if (res.ok) {
+          const { markets } = (await res.json()) as {
+            markets?: Record<string, unknown>[];
+          };
+          if (markets && markets.length > 0) {
+            if (live) {
+              setCards(markets.map(cardFromApi));
+              setLoading(false);
+            }
+            return;
+          }
+        }
+      } catch {
+        // API/DB unavailable — fall back to chain
+      }
       const found: Card[] = [];
       await Promise.all(
         knownMarketIds().map(async (id) => {
@@ -132,7 +173,7 @@ export default function MarketsPage() {
         <p className="text-sm text-neutral-400">No markets match these filters.</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(({ market, pool }) => {
+          {filtered.map(({ market, pool, title }) => {
             const s = uiStatus(market);
             return (
               <Link
@@ -142,9 +183,10 @@ export default function MarketsPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-semibold">
-                    {market.oracle === "Reflector"
-                      ? `${market.asset} ${market.sideA}/${market.sideB}`
-                      : `${market.sideA} vs ${market.sideB}`}
+                    {title ??
+                      (market.oracle === "Reflector"
+                        ? `${market.asset} ${market.sideA}/${market.sideB}`
+                        : `${market.sideA} vs ${market.sideB}`)}
                   </span>
                   <StatusPill status={s} />
                 </div>
