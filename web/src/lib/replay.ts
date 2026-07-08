@@ -4,6 +4,7 @@
 // function over DB rows; reuses the same parimutuel math the live UI shows.
 
 import { impliedRoi, type LadderRow } from "./parimutuel";
+import { crowdForecast } from "./forecast";
 
 export interface ReplayEvent {
   side: number;
@@ -22,6 +23,7 @@ export interface SeriesPoint {
   t: number; // unix seconds
   pool: string; // stroops, stringified
   quotes: SeriesQuote[];
+  win: { side: number; p: number }[]; // crowd-implied P(side wins), sums to ~1
 }
 
 const MAX_POINTS = 300;
@@ -49,6 +51,7 @@ export function replaySeries(
     ladder.set(key, (ladder.get(key) ?? 0n) + e.stake);
     const snapshot = rows();
     const pool = snapshot.reduce((a, r) => a + r.stake, 0n);
+    const fc = crowdForecast(snapshot, rungs);
     points.push({
       t: Math.floor(e.at.getTime() / 1000),
       pool: pool.toString(),
@@ -59,6 +62,7 @@ export function replaySeries(
           roi: impliedRoi(snapshot, side, rung, rakeBps),
         })),
       ),
+      win: fc ? fc.sides.map((s) => ({ side: s.side, p: s.pWin })) : [],
     });
   }
   // thin long histories evenly, always keeping the last point
