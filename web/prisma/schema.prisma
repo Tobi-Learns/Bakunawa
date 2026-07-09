@@ -3,9 +3,9 @@
 // metadata the contract deliberately doesn't store (title, category, display
 // curve per S7). The indexer (src/lib/indexer.ts) is the only writer.
 //
-// NOTE: tables are prefixed Bakunawa* because this Postgres is currently
-// SHARED with StellarPay (same personal Supabase project, testnet-only) —
-// dedicated-DB decision deferred to Tobi before any public deploy.
+// NOTE: tables are prefixed Bakunawa* — legacy of an earlier shared-project
+// arrangement. As of 2026-07-09 they live in Bakunawa's own dedicated Supabase
+// project (migrated off StellarPay's; the prefix is kept to avoid a churn).
 
 generator client {
   provider = "prisma-client-js"
