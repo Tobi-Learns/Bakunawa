@@ -15,9 +15,33 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bakunawa — Dominance Prediction Market",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  title: {
+    default: "Bakunawa - Dominance Prediction Market",
+    template: "%s | Bakunawa",
+  },
   description:
     "The prediction market that rewards conviction: forecast the winner and how big they'll win. The bolder your call, the bigger your share. Settled trustlessly on Stellar.",
+  icons: {
+    icon: "/brand/bakunawa-logo-mark.png",
+    apple: "/brand/bakunawa-logo-mark.png",
+  },
+  openGraph: {
+    title: "Bakunawa - Dominance Prediction Market",
+    description:
+      "Forecast the winner and how big. A Stellar prediction market where the pool rewards conviction.",
+    url: "/",
+    siteName: "Bakunawa",
+    images: [{ url: "/brand/bakunawa-logo-wide.png", width: 1536, height: 1024 }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bakunawa - Dominance Prediction Market",
+    description:
+      "Forecast the winner and how big. A Stellar prediction market where the pool rewards conviction.",
+    images: ["/brand/bakunawa-logo-wide.png"],
+  },
 };
 
 export default function RootLayout({
@@ -31,13 +55,13 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100">
+      <body className="flex min-h-full flex-col bg-neutral-950 text-neutral-100">
         <WalletProvider>
           <Header />
           <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
           <footer className="border-t border-neutral-800 py-4 text-center text-xs text-neutral-500">
-            Bakunawa · dominance prediction market on Stellar testnet · multipliers
-            are relative weights, never fixed odds
+            Bakunawa · dominance prediction market on Stellar testnet · multipliers are
+            relative weights, never fixed odds
           </footer>
         </WalletProvider>
       </body>
