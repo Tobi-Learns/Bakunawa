@@ -251,7 +251,7 @@ export function PredictionSlip({
   return (
     <div className="rounded-lg border border-neutral-800 p-4">
       {/* Title — market + selected outcome */}
-      <div className="mb-3">
+      <div className="mb-4">
         <div className="text-xs text-neutral-500">
           {market.oracle === "Reflector"
             ? `${market.asset} · ${sideName(0)} vs ${sideName(1)}`
@@ -267,7 +267,7 @@ export function PredictionSlip({
       </div>
 
       {/* Buy / Sell tabs */}
-      <div className="mb-4 flex items-center justify-between border-b border-neutral-800">
+      <div className="mb-5 flex items-center justify-between border-b border-neutral-800">
         <div className="flex gap-4">
           {(["buy", "sell"] as const).map((t) => (
             <button
@@ -289,7 +289,7 @@ export function PredictionSlip({
       </div>
 
       {/* Outcome price buttons */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
+      <div className="mb-5 grid grid-cols-2 gap-2">
         {[0, 1].map((side) => (
           <button
             key={side}
@@ -307,7 +307,7 @@ export function PredictionSlip({
       </div>
 
       {/* Dominance margin slider — our extra; disabled when selling */}
-      <div className={`mb-4 ${selling ? "opacity-40" : ""}`}>
+      <div className={`mb-6 ${selling ? "opacity-40" : ""}`}>
         <div className="mb-1 flex items-center justify-between text-xs">
           <span className="text-neutral-500">Dominance margin</span>
           <span className="font-medium text-neutral-300">
@@ -330,18 +330,18 @@ export function PredictionSlip({
       <div className="flex items-center justify-between">
         <span className="text-neutral-400">Amount</span>
         <div className="flex items-baseline">
-          {!selling && <span className="text-4xl font-semibold text-neutral-500">$</span>}
+          {!selling && <span className="text-5xl text-neutral-400">$</span>}
           <input
             value={amountText}
             onChange={(e) => setAmountText(e.target.value.replace(/[^0-9.]/g, ""))}
             inputMode="decimal"
             size={Math.max(amountText.length, 1)}
-            className="min-w-[1ch] bg-transparent text-4xl font-semibold tabular-nums outline-none [field-sizing:content]"
+            className="min-w-[1ch] bg-transparent text-5xl tabular-nums outline-none [field-sizing:content]"
           />
           {selling && <span className="ml-1 text-base text-neutral-500">sh</span>}
         </div>
       </div>
-      <div className="mb-4 mt-2 flex justify-end gap-2">
+      <div className="mb-6 mt-3 flex justify-end gap-2">
         {QUICK.map((v) => (
           <button
             key={v}
@@ -355,7 +355,7 @@ export function PredictionSlip({
 
       {/* To win / Proceeds — only once there's an amount */}
       {amt > 0 && (
-        <div className="flex items-end justify-between gap-3 border-t border-neutral-800 pt-4">
+        <div className="flex items-end justify-between gap-3 border-t border-neutral-800 pt-5">
           <div className="min-w-0">
             <div className="text-neutral-300">{selling ? "Proceeds" : "To win 💵"}</div>
             <div className="flex items-center gap-1 text-xs text-neutral-500">
@@ -378,7 +378,7 @@ export function PredictionSlip({
       <button
         onClick={submit}
         disabled={busy || !canSubmit}
-        className="mt-4 w-full rounded-md bg-blue-600 py-2.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+        className="mt-5 w-full rounded-md bg-blue-600 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
       >
         {!address
           ? "Connect wallet to trade"
