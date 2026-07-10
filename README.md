@@ -8,6 +8,8 @@
 
 Named for the Philippine mythological serpent that swallows the moon — the pool swallows every failed conviction, and grows.
 
+**▶ Live demo: [bakunawa-three.vercel.app](https://bakunawa-three.vercel.app/)** (Stellar testnet)
+
 > **Testnet deployment**
 >
 > | | Address |
@@ -107,6 +109,14 @@ get_market / get_outcome / get_ladder / get_positions / get_side_stake
 Testnet MVP. The full loop runs end-to-end: list a market → predict or convict → trade tickets on the DEX → lock → settle (Reflector or curated) → redeem/claim, with the live crowd forecast and market charts. Settlement math is validated against a hand-settled reference and 37k historical NBA games.
 
 *Testnet only — all keys and assets are disposable. Not audited; not for real funds.*
+
+## Track
+
+Submitted to **Track 3 — DeFi, Stablecoins & Real-World Assets** (StellarX Philippines workshop).
+
+## Team
+
+- Nickjohn Ibuyat — [@Tobi-Learns](https://github.com/Tobi-Learns)
 
 ## License
 
