@@ -22,10 +22,8 @@ export const metadata: Metadata = {
   },
   description:
     "The prediction market that rewards conviction: forecast the winner and how big they'll win. The bolder your call, the bigger your share. Settled trustlessly on Stellar.",
-  icons: {
-    icon: "/brand/bakunawa-logo-mark.png",
-    apple: "/brand/bakunawa-logo-mark.png",
-  },
+  // Icons come from the file-based conventions: app/favicon.ico, app/icon.png,
+  // app/apple-icon.png (generated from public/brand/bakunawa-logo-mark.png).
   openGraph: {
     title: "Bakunawa - Dominance Prediction Market",
     description:
