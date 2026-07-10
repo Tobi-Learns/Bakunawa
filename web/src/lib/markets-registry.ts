@@ -4,7 +4,7 @@
 
 // Demo catalog on the current D2 contract (CDL2YD4D…). Earlier ids (1xxx–4xxx)
 // lived on retired contracts (4xxx = the par-mint v4 retired 2026-07-10).
-const BUILTIN: number[] = [5010];
+const BUILTIN: number[] = [5011, 5010];
 const KEY = "bakunawa:known-markets";
 
 export function knownMarketIds(): number[] {
