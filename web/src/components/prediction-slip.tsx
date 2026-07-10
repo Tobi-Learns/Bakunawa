@@ -252,12 +252,12 @@ export function PredictionSlip({
     <div className="rounded-lg border border-neutral-800 p-4">
       {/* Title — market + selected outcome */}
       <div className="mb-4">
-        <div className="text-xs text-neutral-500">
+        <div className="text-sm text-neutral-500">
           {market.oracle === "Reflector"
             ? `${market.asset} · ${sideName(0)} vs ${sideName(1)}`
             : `${sideName(0)} vs ${sideName(1)}`}
         </div>
-        <div className="text-base font-semibold">
+        <div className="text-xl font-semibold">
           {sideName(selected.side)}
           <span className="font-normal text-neutral-500">
             {" "}
