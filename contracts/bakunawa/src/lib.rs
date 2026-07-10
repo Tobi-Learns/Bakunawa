@@ -23,6 +23,7 @@
 
 #![no_std]
 
+mod dpm;
 mod reflector;
 mod types;
 
@@ -119,15 +120,23 @@ impl Bakunawa {
             .publish((Symbol::new(&env, "create"), id), baseline);
     }
 
-    /// REGULAR prediction (v4): par-mint tradable pool tickets. `amount` USDC
-    /// enters the pot; the predictor receives `amount` side tickets 1:1 from
-    /// the contract's pre-minted custody. Tickets are ordinary classic assets
-    /// — trade them on the DEX; settlement pays whoever holds them (redeem).
-    /// Minting is rejected at/after `close_ts` (S3).
+    /// REGULAR prediction (v4 + D2): mint tradable pool tickets at a DYNAMIC
+    /// price. `amount` USDC enters the pot; the predictor receives
+    /// `dpm_shares(M_side, M_other, amount)` side tickets from the contract's
+    /// pre-minted custody — priced at the side's money-share, so the heavier
+    /// side costs more per share (kills the par-mint snipe, rewards early
+    /// money). Price uses PRE-mint side money. Tickets are ordinary classic
+    /// assets — trade them on the DEX; settlement pays whoever holds them
+    /// (redeem). Minting is rejected at/after `close_ts` (S3).
     pub fn mint_tickets(env: Env, predictor: Address, id: u64, side: u32, amount: i128) {
         predictor.require_auth();
         let market = get_market(&env, id);
         require_open_entry(&env, &market, side, amount);
+
+        // dynamic share count from pre-mint side money (SideStake = reg + conv)
+        let m_side = side_stake(&env, id, side);
+        let m_other = side_stake(&env, id, 1 - side);
+        let shares = dpm::dpm_shares(m_side, m_other, amount);
 
         token::Client::new(&env, &stake_token(&env)).transfer(
             &predictor,
@@ -137,16 +146,22 @@ impl Bakunawa {
         token::Client::new(&env, &ticket_for(&market, side)).transfer(
             &env.current_contract_address(),
             &predictor,
-            &amount,
+            &shares,
         );
 
+        // money aggregate (pot accounting) and share aggregate (redeem split)
         let reg_key = DataKey::Regular(id, side);
         let reg: i128 = env.storage().persistent().get(&reg_key).unwrap_or(0);
         env.storage().persistent().set(&reg_key, &(reg + amount));
+        let sh_key = DataKey::RegularShares(id, side);
+        let sh: i128 = env.storage().persistent().get(&sh_key).unwrap_or(0);
+        env.storage().persistent().set(&sh_key, &(sh + shares));
         bump_side_stake(&env, id, side, amount);
 
-        env.events()
-            .publish((Symbol::new(&env, "mint"), id, predictor), (side, amount));
+        env.events().publish(
+            (Symbol::new(&env, "mint"), id, predictor),
+            (side, amount, shares),
+        );
     }
 
     /// CONVICTION (v4): winner + minimum margin, locked at entry — no exit,
@@ -209,9 +224,21 @@ impl Bakunawa {
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
+        // Regular shares are dynamically priced (D2), so a ticket represents a
+        // pool CLAIM, not $1. Redeem splits the regular class's value by share
+        // count. Both paths reduce to the old par behaviour when shares==money.
+        let reg_money = regular(&env, id, side);
+        let reg_shares = regular_shares(&env, id, side);
         let payout = match market.status {
             MarketStatus::Open => panic_with_error!(&env, Error::NotSettled),
-            MarketStatus::Cancelled => amount, // par refund, no rake
+            MarketStatus::Cancelled => {
+                // full refund = the money backing each share (never par, or
+                // shares > dollars would over-pay and break solvency)
+                if reg_shares <= 0 {
+                    panic_with_error!(&env, Error::NothingToClaim);
+                }
+                amount * reg_money / reg_shares
+            }
             MarketStatus::Settled => {
                 let outcome: Outcome = env
                     .storage()
@@ -221,8 +248,15 @@ impl Bakunawa {
                 if side != outcome.winner {
                     panic_with_error!(&env, Error::NothingToClaim);
                 }
+                if reg_shares <= 0 {
+                    panic_with_error!(&env, Error::NothingToClaim);
+                }
                 let dist = outcome.losing_pool - outcome.rake_amount;
-                amount + amount * dist / outcome.sum_weights
+                // regular class allocation (money + its weighted share of the
+                // losing pool; bounded by the pool), split by share count
+                let reg_alloc =
+                    reg_money * (outcome.sum_weights + dist) / outcome.sum_weights;
+                amount * reg_alloc / reg_shares
             }
         };
         // pull the tickets back into custody, pay from the pot
@@ -436,6 +470,20 @@ fn regular(env: &Env, id: u64, side: u32) -> i128 {
     env.storage()
         .persistent()
         .get(&DataKey::Regular(id, side))
+        .unwrap_or(0)
+}
+
+fn regular_shares(env: &Env, id: u64, side: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::RegularShares(id, side))
+        .unwrap_or(0)
+}
+
+fn side_stake(env: &Env, id: u64, side: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SideStake(id, side))
         .unwrap_or(0)
 }
 

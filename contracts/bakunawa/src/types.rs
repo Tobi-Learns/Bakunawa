@@ -115,8 +115,12 @@ pub enum DataKey {
     Agg(u64, u32, u32),
     /// (market, side) -> total stake on the side (regular + convictions)
     SideStake(u64, u32),
-    /// (market, side) -> total REGULAR (ticket-minted) stake on the side
+    /// (market, side) -> total REGULAR (ticket-minted) MONEY on the side
     Regular(u64, u32),
+    /// (market, side) -> total REGULAR SHARES issued (== Regular money under
+    /// par; > money under dynamic mint pricing / D2). Redeem splits the
+    /// regular class's payout by this share count.
+    RegularShares(u64, u32),
     /// (market, predictor) -> Vec<Position> (convictions only)
     Pos(u64, Address),
 }

@@ -1,8 +1,8 @@
 "use client";
 
-// The prediction slip (v4) — two instruments, one pool:
-//  PREDICTION  par-mints tradable side tickets (exit anytime on the DEX;
-//              trades move the claim, never the cash).
+// The prediction slip (v4 + D2) — two instruments, one pool:
+//  PREDICTION  dynamically-priced Neutral shares (price = the side money-share;
+//              you enter SHARES, we quote $/share + cost). Tradable on the DEX.
 //  CONVICTION  winner + minimum margin, locked at entry, all-or-nothing;
 //              the rung slider repricing live is the signature interaction.
 // Quotes include the user's own stake (self-pricing). Submits chain
@@ -22,6 +22,7 @@ import {
   type MarketView,
 } from "@/lib/bakunawa";
 import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
+import { dollarsForShares, sharePrice } from "@/lib/dpm";
 import { demandMult, impliedRange } from "@/lib/parimutuel";
 import { recordPositionMeta } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
@@ -54,13 +55,32 @@ export function PredictionSlip({
   const mode: "prediction" | "conviction" = selected.rung === 0 ? "prediction" : "conviction";
   const rungSteps = useMemo(() => [0, ...market.rungs], [market.rungs]);
   const rungIndex = Math.max(0, rungSteps.indexOf(selected.rung));
+  // Neutral shares are dynamically priced (D2): the user enters SHARES; quote
+  // the USDC cost + $/share from the side's money-share. Conviction mode keeps
+  // a plain USDC stake.
+  const sideMoneyUsd = (sd: number) =>
+    Number(ladder.filter((r) => r.side === sd).reduce((a, r) => a + r.stake, 0n)) / 1e7;
+  const dpmQuote = useMemo(() => {
+    if (mode !== "prediction") return null;
+    const shares = Number(stakeText) || 0;
+    if (shares <= 0) return null;
+    const mSide = sideMoneyUsd(selected.side);
+    const mOther = sideMoneyUsd(1 - selected.side);
+    const cost = dollarsForShares(mSide, mOther, shares);
+    return { shares, cost, perShare: cost / shares, marketPrice: sharePrice(mSide, mOther) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, stakeText, ladder, selected.side]);
+
   const stake = useMemo(() => {
+    if (mode === "prediction") {
+      return dpmQuote ? BigInt(Math.round(dpmQuote.cost * 1e7)) : 0n;
+    }
     try {
       return parseUsdc(stakeText || "0");
     } catch {
       return 0n;
     }
-  }, [stakeText]);
+  }, [mode, dpmQuote, stakeText]);
 
   const range = useMemo(() => {
     if (stake <= 0n) return null;
@@ -194,9 +214,10 @@ export function PredictionSlip({
       >
         {mode === "prediction" ? (
           <>
-            <b>Neutral prediction</b> — mints tradable {sideName(selected.side)} shares
-            at par. Sell anytime before lock on the DEX; settlement pays whoever holds
-            them.
+            <b>Neutral prediction</b> — mints tradable {sideName(selected.side)}{" "}
+            shares at the live price (the side&apos;s money-share — the heavier the side, the
+            dearer the share). Sell anytime before lock on the DEX; settlement pays
+            whoever holds them.
           </>
         ) : (
           <>
@@ -207,15 +228,29 @@ export function PredictionSlip({
         )}
       </p>
 
-      {/* Stake */}
+      {/* Amount: Shares (Neutral, dynamically priced) or USDC (conviction) */}
       <div className="mb-4">
-        <label className="mb-1 block text-sm text-neutral-400">Stake (USDC)</label>
+        <label className="mb-1 block text-sm text-neutral-400">
+          {mode === "prediction" ? "Shares" : "Stake (USDC)"}
+        </label>
         <input
           value={stakeText}
           onChange={(e) => setStakeText(e.target.value.replace(/[^0-9.]/g, ""))}
           inputMode="decimal"
           className="w-full rounded border border-neutral-700 bg-transparent px-3 py-2 tabular-nums"
         />
+        {dpmQuote && (
+          <div className="mt-1.5 flex justify-between text-xs text-neutral-500">
+            <span>
+              <span className="tabular-nums text-neutral-300">${dpmQuote.perShare.toFixed(3)}</span> /
+              share
+              <span className="text-neutral-600"> · market ${dpmQuote.marketPrice.toFixed(2)}</span>
+            </span>
+            <span className="tabular-nums">
+              ≈ <span className="text-neutral-300">${dpmQuote.cost.toFixed(2)}</span> total
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Live quote */}
