@@ -353,3 +353,87 @@ fn ladder_shows_regular_and_conviction_rows() {
     assert_eq!(s.client.get_side_stake(&1, &0), 550 * USDC);
     assert_eq!(s.client.get_side_stake(&1, &1), 450 * USDC);
 }
+
+// --- Dynamic mint pricing (D2 / phase 1.12) ---
+
+/// The dynamic-mint path (a second mint on a side is DPM-priced): the same $10
+/// buys more shares EARLY (side light) than LATE (side heavy), so the early
+/// buyer out-earns the late one — and the pool still conserves exactly.
+#[test]
+fn dpm_dynamic_mint_rewards_early_and_conserves() {
+    let s = setup();
+    let (ta, _tb) = create_market(&s, 20, &[10], OracleKind::Admin, &s.client.address, 0, 0);
+    // bootstrap both sides at par (first mint per side, M_side == 0)
+    let seed_a = Address::generate(&s.env);
+    let seed_b = Address::generate(&s.env);
+    s.sac.mint(&seed_a, &(50 * USDC));
+    s.sac.mint(&seed_b, &(50 * USDC));
+    s.client.mint_tickets(&seed_a, &20, &0, &(50 * USDC)); // OKC bootstrap
+    s.client.mint_tickets(&seed_b, &20, &1, &(50 * USDC)); // SAS bootstrap (will lose)
+
+    // early buys OKC at ~50c; crowd piles OKC; late buys the same $10 dear
+    let early = Address::generate(&s.env);
+    let crowd = Address::generate(&s.env);
+    let late = Address::generate(&s.env);
+    for a in [&early, &crowd, &late] {
+        s.sac.mint(a, &(80 * USDC));
+    }
+    s.client.mint_tickets(&early, &20, &0, &(10 * USDC));
+    s.client.mint_tickets(&crowd, &20, &0, &(80 * USDC));
+    s.client.mint_tickets(&late, &20, &0, &(10 * USDC));
+
+    let tok = TokenClient::new(&s.env, &ta);
+    let sh_early = tok.balance(&early);
+    let sh_late = tok.balance(&late);
+    assert!(sh_early > sh_late, "early {sh_early} should exceed late {sh_late} shares");
+
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.settle_admin(&20, &0, &10); // OKC wins by 10; SAS loses its $50
+
+    let pay_early = s.client.redeem(&early, &20, &0, &sh_early);
+    let pay_late = s.client.redeem(&late, &20, &0, &sh_late);
+    assert!(pay_early > pay_late, "early {pay_early} should out-earn late {pay_late}");
+    let pay_seed = s.client.redeem(&seed_a, &20, &0, &tok.balance(&seed_a));
+    let pay_crowd = s.client.redeem(&crowd, &20, &0, &tok.balance(&crowd));
+
+    // OKC (winner) sweeps the whole $200 pool; conservation holds.
+    let dust = s.token.balance(&s.client.address);
+    assert_eq!(pay_early + pay_late + pay_seed + pay_crowd + dust, 200 * USDC);
+    assert!((0..10).contains(&dust), "dust {dust}");
+    assert!(s.client.try_redeem(&seed_b, &20, &1, &(50 * USDC)).is_err(), "losing side");
+}
+
+/// Cancel with dynamically-priced shares: tickets are fungible, so a side's
+/// whole money is refunded split by SHARE count (not par). Each side's total
+/// clears exactly; a DPM-cheap buyer gets back more than they paid, a par
+/// holder less — inherent to a fungible dynamic-priced claim.
+#[test]
+fn dpm_cancel_refunds_money_backing_by_share() {
+    let s = setup();
+    let (ta, _tb) = create_market(&s, 21, &[10], OracleKind::Admin, &s.client.address, 300, 0);
+    let seed_a = Address::generate(&s.env);
+    let seed_b = Address::generate(&s.env);
+    let buyer = Address::generate(&s.env);
+    s.sac.mint(&seed_a, &(50 * USDC));
+    s.sac.mint(&seed_b, &(50 * USDC));
+    s.sac.mint(&buyer, &(20 * USDC));
+    s.client.mint_tickets(&seed_a, &21, &0, &(50 * USDC)); // bootstrap OKC
+    s.client.mint_tickets(&seed_b, &21, &1, &(50 * USDC)); // bootstrap SAS
+    s.client.mint_tickets(&buyer, &21, &0, &(20 * USDC)); // dynamic: shares > $20
+
+    let tok = TokenClient::new(&s.env, &ta);
+    let sh_buyer = tok.balance(&buyer);
+    assert!(sh_buyer > 20 * USDC, "dynamic mint should issue > $20 of shares");
+
+    s.client.cancel_market(&21);
+    let refund_buyer = s.client.redeem(&buyer, &21, &0, &sh_buyer);
+    let refund_seed = s.client.redeem(&seed_a, &21, &0, &tok.balance(&seed_a));
+    let refund_b = s.client.redeem(&seed_b, &21, &1, &(50 * USDC));
+
+    // OKC's $70 and SAS's $50 each returned in full (split per share on OKC).
+    assert_close(refund_buyer + refund_seed, 70 * USDC, 5, "OKC money returned");
+    assert_close(refund_b, 50 * USDC, 5, "SAS par refund");
+    assert!(refund_buyer > 20 * USDC, "cheap buyer's fungible shares are worth more");
+    assert_eq!(s.token.balance(&s.treasury), 0, "no rake on cancel");
+    assert!(s.token.balance(&s.client.address) < 10, "pot cleared modulo dust");
+}
