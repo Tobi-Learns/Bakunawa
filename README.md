@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/public/brand/bakunawa-logo-wide.png" alt="Bakunawa" width="640">
+</p>
+
 # Bakunawa — Dominance Prediction Market
 
 **Forecast the winner — and how big.** The prediction market that rewards conviction: the bolder your call, the bigger your share when it lands. Built on Stellar with a Soroban smart contract.
@@ -103,3 +107,7 @@ get_market / get_outcome / get_ladder / get_positions / get_side_stake
 Testnet MVP. The full loop runs end-to-end: list a market → predict or convict → trade tickets on the DEX → lock → settle (Reflector or curated) → redeem/claim, with the live crowd forecast and market charts. Settlement math is validated against a hand-settled reference and 37k historical NBA games.
 
 *Testnet only — all keys and assets are disposable. Not audited; not for real funds.*
+
+## License
+
+Released under the [MIT License](LICENSE) — © 2026 Nickjohn Ibuyat.
