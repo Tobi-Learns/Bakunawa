@@ -330,13 +330,16 @@ export function PredictionSlip({
       <div className="flex items-center justify-between">
         <span className="text-neutral-400">Amount</span>
         <div className="flex items-baseline">
-          {!selling && <span className="text-5xl text-neutral-400">$</span>}
+          {!selling && (
+            <span className={`text-5xl ${amountText ? "text-neutral-400" : "text-neutral-600"}`}>$</span>
+          )}
           <input
             value={amountText}
             onChange={(e) => setAmountText(e.target.value.replace(/[^0-9.]/g, ""))}
             inputMode="decimal"
+            placeholder="0"
             size={Math.max(amountText.length, 1)}
-            className="min-w-[1ch] bg-transparent text-5xl tabular-nums outline-none [field-sizing:content]"
+            className="min-w-[1ch] bg-transparent text-5xl tabular-nums outline-none placeholder:text-neutral-600 [field-sizing:content]"
           />
           {selling && <span className="ml-1 text-base text-neutral-500">sh</span>}
         </div>
