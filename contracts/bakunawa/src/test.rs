@@ -414,24 +414,24 @@ fn dpm_cancel_refunds_money_backing_by_share() {
     let seed_a = Address::generate(&s.env);
     let seed_b = Address::generate(&s.env);
     let buyer = Address::generate(&s.env);
-    s.sac.mint(&seed_a, &(50 * USDC));
+    s.sac.mint(&seed_a, &(30 * USDC));
     s.sac.mint(&seed_b, &(50 * USDC));
     s.sac.mint(&buyer, &(20 * USDC));
-    s.client.mint_tickets(&seed_a, &21, &0, &(50 * USDC)); // bootstrap OKC
+    s.client.mint_tickets(&seed_a, &21, &0, &(30 * USDC)); // bootstrap OKC (underdog)
     s.client.mint_tickets(&seed_b, &21, &1, &(50 * USDC)); // bootstrap SAS
-    s.client.mint_tickets(&buyer, &21, &0, &(20 * USDC)); // dynamic: shares > $20
+    s.client.mint_tickets(&buyer, &21, &0, &(20 * USDC)); // OKC is cheap => shares > $20
 
     let tok = TokenClient::new(&s.env, &ta);
     let sh_buyer = tok.balance(&buyer);
-    assert!(sh_buyer > 20 * USDC, "dynamic mint should issue > $20 of shares");
+    assert!(sh_buyer > 20 * USDC, "buying the cheap side issues > $20 of shares");
 
     s.client.cancel_market(&21);
     let refund_buyer = s.client.redeem(&buyer, &21, &0, &sh_buyer);
     let refund_seed = s.client.redeem(&seed_a, &21, &0, &tok.balance(&seed_a));
     let refund_b = s.client.redeem(&seed_b, &21, &1, &(50 * USDC));
 
-    // OKC's $70 and SAS's $50 each returned in full (split per share on OKC).
-    assert_close(refund_buyer + refund_seed, 70 * USDC, 5, "OKC money returned");
+    // OKC's $50 and SAS's $50 each returned in full (split per share on OKC).
+    assert_close(refund_buyer + refund_seed, 50 * USDC, 5, "OKC money returned");
     assert_close(refund_b, 50 * USDC, 5, "SAS par refund");
     assert!(refund_buyer > 20 * USDC, "cheap buyer's fungible shares are worth more");
     assert_eq!(s.token.balance(&s.treasury), 0, "no rake on cancel");

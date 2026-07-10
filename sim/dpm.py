@@ -45,27 +45,32 @@ import random
 
 
 def price(m_side: float, m_other: float) -> float:
-    """Mint price per share on a side == its money share (the forecast)."""
+    """MINT price per share on a side = 2 * its money-share, so a 50/50 book
+    prices at par ($1, matching the house seed) and rises to $2 as the side
+    approaches certainty (the underdog toward $0). Distinct from the FORECAST,
+    which is the raw money-share (m_side/(m_side+m_other))."""
     tot = m_side + m_other
-    return m_side / tot if tot > 0 else 0.5
+    return 2 * m_side / tot if tot > 0 else 1.0
 
 
 def mint_shares(m_side: float, m_other: float, dollars: float) -> float:
-    """Shares minted for `dollars` on a side, integral dm/price over the mint."""
+    """Shares minted for `dollars` on a side = integral dm/price(m) over the
+    mint, with price = 2*money-share. Halves the raw money-share integral so
+    50/50 mints at par."""
     if m_side <= 0:
         raise ValueError("side must be seeded (M_i > 0) before dynamic minting")
-    return dollars + m_other * math.log((m_side + dollars) / m_side)
+    return (dollars + m_other * math.log((m_side + dollars) / m_side)) / 2
 
 
 def mint_shares_approx(m_side: float, m_other: float, dollars: float) -> float:
     """ln-free approximation for on-chain use: price the whole mint at its
-    MIDPOINT money-share (integer-only arithmetic, no logs / no floats needed
-    in Soroban). shares = d / price_mid, price_mid = (M_i+d/2)/(M_i+M_o+d/2).
-    Exact for infinitesimal mints; conservative (a hair fewer shares) for large
-    ones. All ops are +,-,*,/ so this ports to i128 stroops directly."""
+    MIDPOINT (price = 2*money-share), integer-only arithmetic (no logs/floats
+    in Soroban). shares = d / price_mid, price_mid = 2*(M_i+d/2)/(M_i+M_o+d/2).
+    Exact for infinitesimal mints; conservative for large ones. All ops are
+    +,-,*,/ so this ports to i128 stroops directly."""
     if m_side <= 0:
         raise ValueError("side must be seeded (M_i > 0) before dynamic minting")
-    return dollars * (2 * m_side + dollars + 2 * m_other) / (2 * m_side + dollars)
+    return dollars * (2 * m_side + dollars + 2 * m_other) / (2 * (2 * m_side + dollars))
 
 
 class Pos:
@@ -342,8 +347,8 @@ def exp_approx_accuracy(trials=8000, seed=11):
 
 
 def price_curve():
-    """Mint price by money-share (== the forecast) — legibility table."""
-    return [(f, f, 1 - f) for f in (0.5, 0.6, 0.7, 0.8, 0.9)]
+    """MINT price = 2 * money-share ($1 at 50/50, up to $2 at certainty)."""
+    return [(f, 2 * f, 2 * (1 - f)) for f in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)]
 
 
 # ---------------------------------------------------------------------------
@@ -409,32 +414,31 @@ def main():
       f"only **{snipe['sniper_shares_per_$']:.2f} shares/$**), so the **early "
       "holder now out-earns him** — early conviction is structurally ahead.\n")
 
-    p("## 4. On-chain math: ln-free integer approximation (open question for 1.12b)\n")
-    p("Soroban is no_std i128 with no floats. The exact mint uses `ln`; the "
-      "cheap alternative prices the whole mint at its **midpoint money-share** "
-      "(`shares = d*(2*M_i+d+2*M_o)/(2*M_i+d)`) — pure integer +,-,*,/. It is "
-      "exact for small mints and degrades as one mint dwarfs its side, so a "
-      "**per-mint cap** keeps it tight:\n")
+    p("## 4. On-chain math: ln-free integer approximation (reference)\n")
+    p("Soroban is no_std i128 with no floats. Owner chose the exact fixed-point "
+      "`ln` (see contracts/bakunawa/src/dpm.rs). This ln-free midpoint rule "
+      "(`shares = d*(2*M_i+d+2*M_o)/(2*(2*M_i+d))`, price = 2*money-share) is "
+      "kept as a validated fallback — exact for small mints, degrading as one "
+      "mint dwarfs its side:\n")
     p("| per-mint cap (d <= cap x M_side) | worst error vs exact |")
     p("|---|---|")
     for c in approx["caps"]:
         label = "unbounded (up to full pool)" if c is None else f"{c:g}x"
         p(f"| {label} | {approx['worst'][c]*100:.2f}% |")
-    p("\n**Decision for 1.12b:** either (a) a per-mint cap (e.g. one mint may at "
-      "most ~double its side) so the integer midpoint rule is accurate, "
-      "(b) a small fixed-point `ln`/multi-segment integrator on-chain (exact, "
-      "more code + audit surface), or (c) a bounded-share DPM (share-ratio, "
-      "integer `sqrt`) that avoids `ln` entirely at the cost of price != the "
-      "money-share forecast. Recommend (a) — smallest contract surface, keeps "
-      "price == forecast.\n")
+    p("\n(Contract uses exact fixed-point `ln`; this table just bounds the "
+      "cheap alternative if it is ever wanted.)\n")
 
-    p("## 5. Price = the forecast (legibility)\n")
-    p("| side money share | mint price | other side |")
+    p("## 5. Mint price = 2 x money-share (par at 50/50)\n")
+    p("The MINT price is **2 x the side's money-share**: $1 at a 50/50 book "
+      "(matching the house seed's par mint, and fair — buy $1, win 2x), rising "
+      "to $2 as the side nears certainty, toward $0 for the underdog. The "
+      "FORECAST stays the raw money-share (the % on the win chart); the mint "
+      "price is that scaled so 50/50 == par.\n")
+    p("| side money-share (forecast) | mint price | other side |")
     p("|---|---|---|")
-    for _, pu, pd in price_curve():
-        p(f"| {pu*100:.0f}% | ${pu:.2f} | ${pd:.2f} |")
-    p("\nThe mint price IS the crowd money-share we already display — prices sum "
-      "to 1, no LMSR subsidy, redemption stays the parimutuel pool split.\n")
+    for s_share, pu, pd in price_curve():
+        p(f"| {s_share*100:.0f}% | ${pu:.2f} | ${pd:.2f} |")
+    p("\nNo LMSR subsidy; redemption stays the parimutuel pool split.\n")
 
     report = "\n".join(L)
     print(report)
