@@ -43,6 +43,22 @@ export default function HowItWorksPage() {
         </p>
       </Section>
 
+      <Section title="Dynamic share pricing">
+        <p>
+          Neutral shares mint at a <b>dynamic price = the side&apos;s share of the pooled
+          money</b> — the same number as the crowd forecast, scaled so a 50/50 book prices
+          at <b>$1</b> and a near-certain side approaches <b>$2</b> (the underdog toward $0).
+        </p>
+        <p>
+          So the heavier side is dearer per share and the under-backed side is cheap: <b>early
+          and contrarian money gets more shares per dollar</b>, while piling the near-certain
+          side late — the classic information snipe that dilutes early holders — is priced out.
+          Every dollar still enters the same pot and redemption is the parimutuel pool split, so
+          there is <b>no market-maker subsidy to drain</b> — it stays solvent by construction
+          (this is why a dynamic <i>parimutuel</i> works where an LMSR maker would not).
+        </p>
+      </Section>
+
       <Section title="How the pool pays out">
         <p>
           Every losing stake — wrong winner or unmet margin — funds the winners, split by

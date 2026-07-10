@@ -14,7 +14,7 @@ Named for the Philippine mythological serpent that swallows the moon — the poo
 >
 > | | Address |
 > |---|---|
-> | **Bakunawa contract (Soroban, testnet)** | [`CACPGURDH7ZDAAD2PBVKFPN4X46RELH2XSJU7E5BNYT6EJZOAYJ4I22L`](https://stellar.expert/explorer/testnet/contract/CACPGURDH7ZDAAD2PBVKFPN4X46RELH2XSJU7E5BNYT6EJZOAYJ4I22L) |
+> | **Bakunawa contract (Soroban, testnet)** | [`CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP`](https://stellar.expert/explorer/testnet/contract/CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP) |
 > | Oracle (Reflector CEX/DEX price feed, testnet) | `CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63` |
 > | Stake asset (test USDC SAC) | `CAKBCKBUE3ZRSNH6CDYAB62ZFWL7U7OX6NBZ6EUDFID22PRLICFJXHGS` |
 > | Soroban RPC | `https://soroban-testnet.stellar.org` |
@@ -34,7 +34,7 @@ Betting is huge in the Philippines, and this spread-and-dominance intuition is s
 
 Existing prediction markets only ask "who wins?" Bakunawa asks **who wins, and by how much** — in one shared pool, with two kinds of position:
 
-- **Regular predictions** back just the winner. You mint tradable per-side pool tickets at par and can buy/sell them anytime before lock on Stellar's DEX — exit at the live market price, exactly like an order-book prediction market. Settlement pays whoever holds the tickets.
+- **Neutral predictions** back just the winner. You mint tradable per-side pool **shares** at a **dynamic price** — the side's share of the pooled money (par at 50/50, richer as a side nears certainty), so the heavier side costs more and buying the under-backed side is cheap. Early / contrarian money is rewarded and late piling of the near-certain side is priced out. Shares are classic Stellar assets: buy/sell them anytime before lock on the DEX, and settlement pays whoever holds them.
 - **Convictions** back the winner *plus a minimum margin*. Locked at entry, all-or-nothing: a conviction wins only if its side wins by at least the margin called (an exact hit wins). The rarer the call, the bigger the multiplier.
 
 Both share one pot. Every losing stake — wrong winner *or* unmet margin — funds the winners:
@@ -51,10 +51,10 @@ The pool's state also inverts into a live **crowd-implied margin distribution** 
 ## How it works
 
 1. **A curator lists a market** — two sides and a ladder of margin thresholds, with a settlement source (Reflector for crypto, a named official source for curated events) and a lock/settle time. A house seed makes the odds and forecast show numbers from minute one.
-2. **You take a position** — either *mint regular tickets* (back the winner; tradable before lock) or *place a conviction* (back the winner **by at least** a chosen margin — locked, all-or-nothing, and the rarer the call the bigger the payout).
-3. **Trade before lock** — regular tickets are classic Stellar assets, so you can buy or sell them on the native DEX at the live price right up to lock; your claim moves, the pool's cash stays escrowed.
+2. **You take a position** — either *mint neutral shares* (back the winner; dynamically priced at the crowd's implied probability; tradable before lock) or *place a conviction* (back the winner **by at least** a chosen margin — locked, all-or-nothing, and the rarer the call the bigger the payout).
+3. **Trade before lock** — neutral shares are classic Stellar assets, so you can buy or sell them on the native DEX at the live price right up to lock; your claim moves, the pool's cash stays escrowed.
 4. **Lock & settle** — at lock the market freezes (no new entries); at settle the oracle posts the result and the pool pays out by demand weight, with wrong calls funding the winners.
-5. **Redeem or claim** — ticket holders redeem, winning convictions claim; funds pull from the contract. Nothing is ever pushed, and the pool can never owe more than it holds.
+5. **Redeem or claim** — share holders redeem, winning convictions claim; funds pull from the contract. Nothing is ever pushed, and the pool can never owe more than it holds.
 
 ## Settlement
 
@@ -115,9 +115,9 @@ npm run dev                 # http://localhost:3000
 ```rust
 initialize(admin, token, treasury)
 create_market(params)                              // curator; per-side ticket assets pre-minted at listing
-mint_tickets(predictor, id, side, amount)          // regular prediction — par-mint tradable side tickets
+mint_tickets(predictor, id, side, amount)          // neutral prediction — dynamic-priced tradable side shares
 place_conviction(predictor, id, side, rung, amount) // conviction — locked, all-or-nothing, rung ≥ 1
-redeem(holder, id, side, amount) -> i128           // ticket holders redeem after settlement / at par on cancel
+redeem(holder, id, side, amount) -> i128           // share holders redeem after settlement / money-backing on cancel
 claim(predictor, id) -> i128                       // convictions collect winnings / refunds
 settle_admin(id, winner, margin) / settle_oracle(id) / cancel_market(id)
 get_market / get_outcome / get_ladder / get_positions / get_side_stake
@@ -125,7 +125,7 @@ get_market / get_outcome / get_ladder / get_positions / get_side_stake
 
 ## Status
 
-Testnet MVP. The full loop runs end-to-end: list a market → predict or convict → trade tickets on the DEX → lock → settle (Reflector or curated) → redeem/claim, with the live crowd forecast and market charts. Settlement math is validated against a hand-settled reference and 37k historical NBA games.
+Testnet MVP. The full loop runs end-to-end: list a market → predict or convict → trade shares on the DEX → lock → settle (Reflector or curated) → redeem/claim, with the live crowd forecast and market charts. Neutral shares use dynamic (money-share) mint pricing so early conviction is rewarded and late piling is priced out. Settlement math is validated against a hand-settled reference and 37k historical NBA games.
 
 *Testnet only — all keys and assets are disposable. Not audited; not for real funds.*
 
