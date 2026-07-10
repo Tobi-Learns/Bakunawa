@@ -56,7 +56,7 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col bg-neutral-950 text-neutral-100">
         <WalletProvider>
           <Header />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
+          <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-8">{children}</main>
           <footer className="border-t border-neutral-800 py-4 text-center text-xs text-neutral-500">
             Bakunawa · dominance prediction market on Stellar testnet · multipliers are
             relative weights, never fixed odds
