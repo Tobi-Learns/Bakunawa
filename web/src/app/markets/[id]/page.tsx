@@ -12,7 +12,6 @@ import { Countdown } from "@/components/countdown";
 import { CrowdForecast } from "@/components/crowd-forecast";
 import { MarketCharts } from "@/components/market-charts";
 import { PredictionSlip } from "@/components/prediction-slip";
-import { TradeWidget } from "@/components/trade-widget";
 import { WinProbabilityCard } from "@/components/win-probability-card";
 import { HonestyTip } from "@/components/honesty-tip";
 import { Ladder } from "@/components/ladder";
@@ -206,7 +205,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
 
         {/* Trade sidebar — prediction slip + sell shares (Open only, sticky) */}
         {status === "Open" && (
-          <aside className="flex flex-col gap-6 lg:sticky lg:top-6">
+          <aside className="lg:sticky lg:top-6">
             <PredictionSlip
               market={market}
               ladder={ladder}
@@ -214,7 +213,6 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
               onSelect={(s, r) => setSelected({ side: s, rung: r })}
               onPlaced={() => setPlacedAt(Date.now())}
             />
-            <TradeWidget market={market} />
           </aside>
         )}
       </div>
