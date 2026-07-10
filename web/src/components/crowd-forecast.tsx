@@ -1,15 +1,17 @@
 "use client";
 
-// Crowd forecast (Phase 1.10b) — the PM-positioning headline. The pool's
-// state inverted into "the crowd says X% chance SIDE wins by Y", client-side
-// from live on-chain pool state (lib/forecast.ts). Per the design doc, the
-// forecast — not the payout — is the headline number.
+// Crowd forecast (Phase 1.10, money-share model) — the PM-positioning
+// headline. "The crowd says" = where the crowd's money sits, read live from
+// on-chain pool state (lib/forecast.ts). The split bar is the side-vs-side
+// share; each side's ladder breaks that side's money down by dominance level
+// (Neutral tickets + each margin rung), summing to 100% per side. No inverted
+// "likelihood" — just the crowd's actual composition.
 
 import type { LadderRowView, MarketView } from "@/lib/bakunawa";
 import { crowdForecast } from "@/lib/forecast";
 
 function rungLabel(market: MarketView, rung: number): string {
-  if (rung === 0) return "wins";
+  if (rung === 0) return "Neutral";
   return market.oracle === "Reflector"
     ? `by ≥ ${(rung / 100).toFixed(2)}%`
     : `by ≥ ${rung}`;
@@ -26,18 +28,18 @@ export function CrowdForecast({
   if (!forecast) return null;
   const [a, b] = forecast.sides;
   const sideName = (s: number) => (s === 0 ? market.sideA : market.sideB);
-  // headline: the more likely winner + its most-probable non-trivial margin call
+  // headline: the side holding more of the pool + where that side's money leans
   const lead = a.pWin >= b.pWin ? a : b;
   const leadName = sideName(lead.side);
-  const deepest = [...lead.survival]
-    .filter((s) => s.rung > 0 && s.p >= 0.2)
-    .sort((x, y) => y.rung - x.rung)[0];
+  const topBucket = [...lead.breakdown]
+    .filter((x) => x.rung > 0 && x.p > 0)
+    .sort((x, y) => y.p - x.p)[0];
 
   return (
     <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-neutral-300">Crowd forecast</h2>
-        <span className="text-xs text-neutral-600">inverted from the pool · not fixed odds</span>
+        <span className="text-xs text-neutral-600">share of the live pool · not fixed odds</span>
       </div>
 
       {/* Headline sentence */}
@@ -46,17 +48,16 @@ export function CrowdForecast({
         <b>
           {(lead.pWin * 100).toFixed(0)}% {leadName}
         </b>
-        {deepest && (
+        {topBucket && (
           <>
             {" "}
-            · <b>{(deepest.p * 100).toFixed(0)}%</b> {leadName}{" "}
-            {rungLabel(market, deepest.rung)}
+            · <b>{(topBucket.p * 100).toFixed(0)}%</b> of it {rungLabel(market, topBucket.rung)}
           </>
         )}
         .
       </p>
 
-      {/* Win-probability split bar */}
+      {/* Side-vs-side split bar */}
       <div className="mb-1 flex h-6 overflow-hidden rounded">
         <div
           className="flex items-center justify-start bg-sky-700 px-2 text-xs font-medium text-white"
@@ -72,30 +73,30 @@ export function CrowdForecast({
         </div>
       </div>
 
-      {/* Margin ladder — survival probabilities per side */}
+      {/* Per-side breakdown — how each side's money splits across dominance */}
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
         {forecast.sides.map((f) => (
           <div key={f.side}>
-            <div className="mb-1 text-xs font-medium text-neutral-400">{sideName(f.side)}</div>
+            <div className="mb-1 text-xs font-medium text-neutral-400">
+              {sideName(f.side)} <span className="text-neutral-600">· where its money sits</span>
+            </div>
             <ul className="flex flex-col gap-0.5 text-sm">
-              {f.survival
-                .filter((s) => s.rung > 0)
-                .map((s) => (
-                  <li key={s.rung} className="flex items-center gap-2">
-                    <span className="w-24 shrink-0 text-neutral-500">
-                      {rungLabel(market, s.rung)}
-                    </span>
-                    <span className="h-1.5 flex-1 overflow-hidden rounded bg-neutral-800">
-                      <span
-                        className="block h-full rounded bg-sky-600"
-                        style={{ width: `${Math.min(s.p * 100, 100)}%` }}
-                      />
-                    </span>
-                    <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
-                      {(s.p * 100).toFixed(0)}%
-                    </span>
-                  </li>
-                ))}
+              {f.breakdown.map((s) => (
+                <li key={s.rung} className="flex items-center gap-2">
+                  <span className="w-24 shrink-0 text-neutral-500">
+                    {rungLabel(market, s.rung)}
+                  </span>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded bg-neutral-800">
+                    <span
+                      className={`block h-full rounded ${s.rung === 0 ? "bg-neutral-500" : "bg-sky-600"}`}
+                      style={{ width: `${Math.min(s.p * 100, 100)}%` }}
+                    />
+                  </span>
+                  <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
+                    {(s.p * 100).toFixed(0)}%
+                  </span>
+                </li>
+              ))}
             </ul>
           </div>
         ))}

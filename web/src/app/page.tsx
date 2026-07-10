@@ -76,7 +76,7 @@ export default function Home() {
         {[
           {
             h: "Predict or convict",
-            b: "Back a winner with tradable tickets, or lock a conviction on the margin. The rarer the call, the bigger the multiplier.",
+            b: "Back a winner with tradable shares, or lock a conviction on the margin. The rarer the call, the bigger the multiplier.",
           },
           {
             h: "Watch the pool swallow",

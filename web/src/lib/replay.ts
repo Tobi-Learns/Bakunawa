@@ -52,6 +52,13 @@ export function replaySeries(
     const snapshot = rows();
     const pool = snapshot.reduce((a, r) => a + r.stake, 0n);
     const fc = crowdForecast(snapshot, rungs);
+    // Until both sides have stake there is no two-sided crowd — a one-sided
+    // seed snapshot would read 100/0. Show a neutral 50/50 baseline instead,
+    // so the sentiment line starts balanced and only diverges once both sides
+    // are funded (Polymarket-style fresh-market start).
+    const twoSided = [0, 1].every((side) =>
+      snapshot.some((r) => r.side === side && r.stake > 0n),
+    );
     points.push({
       t: Math.floor(e.at.getTime() / 1000),
       pool: pool.toString(),
@@ -62,7 +69,13 @@ export function replaySeries(
           roi: impliedRoi(snapshot, side, rung, rakeBps),
         })),
       ),
-      win: fc ? fc.sides.map((s) => ({ side: s.side, p: s.pWin })) : [],
+      win:
+        twoSided && fc
+          ? fc.sides.map((s) => ({ side: s.side, p: s.pWin }))
+          : [
+              { side: 0, p: 0.5 },
+              { side: 1, p: 0.5 },
+            ],
     });
   }
   // thin long histories evenly, always keeping the last point
