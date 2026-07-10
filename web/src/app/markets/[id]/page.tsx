@@ -159,56 +159,65 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* Win probability over time — the headline visual, top of the page */}
-      <WinProbabilityCard market={market} ladder={ladder} />
-
-      {/* Crowd forecast — current snapshot (inverted from pool state) */}
-      {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}
-
-      {/* Ladder + prediction slip */}
+      {/* Polymarket-style split: main content left, sticky trade sidebar right
+          (Open only). Non-Open markets flow single-column. */}
       <div
-        className={`grid gap-6 ${status === "Open" ? "lg:grid-cols-3" : "md:grid-cols-2"}`}
-        key={placedAt}
+        className={
+          status === "Open"
+            ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+            : "flex flex-col gap-6"
+        }
       >
-        {[0, 1].map((side) => (
-          <Ladder
-            key={side}
-            market={market}
-            ladder={ladder}
-            outcome={outcome}
-            move={move}
-            status={status}
-            side={side}
-            selected={status === "Open" ? selected : null}
-            onSelect={
-              status === "Open" ? (s, r) => setSelected({ side: s, rung: r }) : undefined
-            }
-          />
-        ))}
+        {/* Main column */}
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Win probability over time — the headline visual */}
+          <WinProbabilityCard market={market} ladder={ladder} />
+
+          {/* Crowd forecast — current snapshot from pool state */}
+          {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}
+
+          {/* The two sides' ladders */}
+          <div className="grid items-start gap-6 md:grid-cols-2" key={placedAt}>
+            {[0, 1].map((side) => (
+              <Ladder
+                key={side}
+                market={market}
+                ladder={ladder}
+                outcome={outcome}
+                move={move}
+                status={status}
+                side={side}
+                selected={status === "Open" ? selected : null}
+                onSelect={
+                  status === "Open" ? (s, r) => setSelected({ side: s, rung: r }) : undefined
+                }
+              />
+            ))}
+          </div>
+
+          <MarketCharts market={market} />
+
+          <p className="text-xs text-neutral-600">
+            Every number on this page is computed in your browser from on-chain pool state
+            (polled ~12s). Implied payouts include your stake — piling on a rung prices it
+            down. Click a ladder row to load it into the slip.
+          </p>
+        </div>
+
+        {/* Trade sidebar — prediction slip + sell shares (Open only, sticky) */}
         {status === "Open" && (
-          <PredictionSlip
-            market={market}
-            ladder={ladder}
-            selected={selected}
-            onSelect={(s, r) => setSelected({ side: s, rung: r })}
-            onPlaced={() => setPlacedAt(Date.now())}
-          />
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-6">
+            <PredictionSlip
+              market={market}
+              ladder={ladder}
+              selected={selected}
+              onSelect={(s, r) => setSelected({ side: s, rung: r })}
+              onPlaced={() => setPlacedAt(Date.now())}
+            />
+            <TradeWidget market={market} />
+          </aside>
         )}
       </div>
-
-      {status === "Open" && (
-        <div className="md:max-w-md">
-          <TradeWidget market={market} />
-        </div>
-      )}
-
-      <MarketCharts market={market} />
-
-      <p className="text-xs text-neutral-600">
-        Every number on this page is computed in your browser from on-chain pool state
-        (polled ~12s). Implied payouts include your stake — piling on a rung prices it
-        down. Click a ladder row to load it into the slip.
-      </p>
     </div>
   );
 }
