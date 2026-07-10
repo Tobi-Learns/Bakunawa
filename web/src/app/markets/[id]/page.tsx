@@ -172,34 +172,36 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           {/* Win probability over time — the headline visual */}
           <WinProbabilityCard market={market} ladder={ladder} />
 
-          {/* Crowd forecast — current snapshot from pool state */}
+          {/* Crowd forecast — current snapshot from pool state. On OPEN markets
+              this replaces the ladder tables (same per-side breakdown). */}
           {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}
 
-          {/* The two sides' ladders */}
-          <div className="grid items-start gap-6 md:grid-cols-2" key={placedAt}>
-            {[0, 1].map((side) => (
-              <Ladder
-                key={side}
-                market={market}
-                ladder={ladder}
-                outcome={outcome}
-                move={move}
-                status={status}
-                side={side}
-                selected={status === "Open" ? selected : null}
-                onSelect={
-                  status === "Open" ? (s, r) => setSelected({ side: s, rung: r }) : undefined
-                }
-              />
-            ))}
-          </div>
+          {/* Ladder tables only post-lock, where they show unique states
+              (if-settled-now / final ROI / banked) the forecast card can't. */}
+          {status !== "Open" && (
+            <div className="grid items-start gap-6 md:grid-cols-2" key={placedAt}>
+              {[0, 1].map((side) => (
+                <Ladder
+                  key={side}
+                  market={market}
+                  ladder={ladder}
+                  outcome={outcome}
+                  move={move}
+                  status={status}
+                  side={side}
+                  selected={null}
+                  onSelect={undefined}
+                />
+              ))}
+            </div>
+          )}
 
           <MarketCharts market={market} />
 
           <p className="text-xs text-neutral-600">
             Every number on this page is computed in your browser from on-chain pool state
             (polled ~12s). Implied payouts include your stake — piling on a rung prices it
-            down. Click a ladder row to load it into the slip.
+            down. Pick a side and dominance margin in the Trade panel.
           </p>
         </div>
 
