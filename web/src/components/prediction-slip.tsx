@@ -22,7 +22,7 @@ import {
   type LadderRowView,
   type MarketView,
 } from "@/lib/bakunawa";
-import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
+import { CONFIG, parseUsdc } from "@/lib/config";
 import { dollarsForShares, sharePrice } from "@/lib/dpm";
 import { demandMult, impliedRange } from "@/lib/parimutuel";
 import { recordPositionMeta } from "@/lib/positions-meta";
@@ -121,7 +121,6 @@ export function PredictionSlip({
     return impliedRange(ladder, selected.side, selected.rung, market.rungs, market.rakeBps, stake);
   }, [selling, ladder, selected, market.rungs, market.rakeBps, stake]);
   const mult = demandMult(ladder, selected.side, selected.rung);
-  const payoutAt = (roi: number) => formatUsdc(stake + BigInt(Math.floor(Number(stake) * roi)));
   const rangePoint = range !== null && Math.abs(range.max - range.min) < 0.005;
 
   const bidN = book.bid ? Number(book.bid) : null;
@@ -346,32 +345,23 @@ export function PredictionSlip({
         )}
       </div>
 
-      {/* Quote box */}
+      {/* Quote box — one line: price/multiplier + return; detail in the tooltip */}
       {selling ? (
-        <div className="mb-4 rounded border border-neutral-800 bg-neutral-900/50 px-3 py-2.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-neutral-400">Best bid</span>
-            <span className="tabular-nums">{book.bid ? `$${Number(book.bid).toFixed(3)}` : "—"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-neutral-400">Proceeds</span>
+        <div className="mb-4 flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/50 px-3 py-2.5 text-sm">
+          <span className="tabular-nums text-neutral-300">
+            {book.bid ? `$${Number(book.bid).toFixed(3)} / sh` : "no bid"}
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="font-medium text-emerald-400 tabular-nums">
               {sellProceeds !== null ? `≈ $${sellProceeds.toFixed(2)}` : "—"}
             </span>
-          </div>
-          <p className="mt-1.5 text-xs text-neutral-600">
-            Fills at market against the best bid on Stellar&apos;s DEX ({code}). Any unfilled
-            remainder rests as an offer.
-          </p>
+            <InfoDot text={`Fills at market against the best bid on Stellar's DEX (${code}). Any unfilled remainder rests as an offer.`} />
+          </span>
         </div>
       ) : (
-        <div className="mb-4 rounded border border-neutral-800 bg-neutral-900/50 px-3 py-2.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-neutral-400">Rarity multiplier (now)</span>
-            <span className="tabular-nums">×{mult ? mult.toFixed(2) : "—"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-neutral-400">If your side wins</span>
+        <div className="mb-4 flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/50 px-3 py-2.5 text-sm">
+          <span className="tabular-nums text-neutral-300">×{mult ? mult.toFixed(2) : "—"}</span>
+          <span className="flex items-center gap-1.5">
             <span className="font-medium text-emerald-400 tabular-nums">
               {range === null
                 ? "—"
@@ -379,24 +369,16 @@ export function PredictionSlip({
                   ? `+${(range.max * 100).toFixed(1)}%`
                   : `+${(range.min * 100).toFixed(0)}% to +${(range.max * 100).toFixed(0)}%`}
             </span>
-          </div>
-          <div className="flex justify-between text-neutral-500">
-            <span>Potential payout</span>
-            <span className="tabular-nums">
-              {range === null
-                ? "—"
-                : rangePoint
-                  ? `${payoutAt(range.max)} USDC`
-                  : `${payoutAt(range.min)} – ${payoutAt(range.max)} USDC`}
-            </span>
-          </div>
-          <p className="mt-1.5 text-xs text-neutral-600">
-            {rangePoint
-              ? "Quote includes your stake; the pool reprices as money moves."
-              : selected.rung === 0
-                ? "The range is the honest bracket: you earn the high end when convictions on your side die (banked into the pool), the low end when they land and take their cut."
-                : "The range spans the final margin: the high end if your side wins by just your margin, the low end if deeper convictions also land."}
-          </p>
+            <InfoDot
+              text={
+                rangePoint
+                  ? "Quote includes your stake; the pool reprices as money moves."
+                  : selected.rung === 0
+                    ? "The range is the honest bracket: you earn the high end when convictions on your side die (banked into the pool), the low end when they land and take their cut."
+                    : "The range spans the final margin: the high end if your side wins by just your margin, the low end if deeper convictions also land."
+              }
+            />
+          </span>
         </div>
       )}
 
@@ -437,6 +419,15 @@ export function PredictionSlip({
       )}
       {phase.step === "error" && <p className="mt-3 text-sm text-red-400">{phase.message}</p>}
     </div>
+  );
+}
+
+/** Tiny hover-tooltip dot — carries the honest-bracket / fill detail. */
+function InfoDot({ text }: { text: string }) {
+  return (
+    <span title={text} className="cursor-help select-none text-xs text-neutral-600">
+      ⓘ
+    </span>
   );
 }
 
