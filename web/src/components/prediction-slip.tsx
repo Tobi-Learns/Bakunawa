@@ -236,7 +236,7 @@ export function PredictionSlip({
     : toWin
       ? Math.abs(toWin.hi - toWin.lo) < 0.01
         ? `$${toWin.hi.toFixed(2)}`
-        : `$${toWin.lo.toFixed(0)}–$${toWin.hi.toFixed(0)}`
+        : `$${toWin.lo.toFixed(2)}–$${toWin.hi.toFixed(2)}`
       : "—";
   const winSub = selling
     ? book.bid
@@ -355,7 +355,8 @@ export function PredictionSlip({
 
       {/* To win / Proceeds — only once there's an amount */}
       {amt > 0 && (
-        <div className="flex items-end justify-between gap-3 border-t border-neutral-800 pt-5">
+        <div className="flex items-start justify-between gap-3 border-t border-neutral-800 pt-5">
+          {/* label column */}
           <div className="min-w-0">
             <div className="text-neutral-300">{selling ? "Proceeds" : "To win 💵"}</div>
             <div className="flex items-center gap-1 text-xs text-neutral-500">
@@ -369,9 +370,21 @@ export function PredictionSlip({
               />
             </div>
           </div>
-          <div className="whitespace-nowrap text-4xl font-bold tabular-nums text-emerald-400">
-            {winValue}
-          </div>
+          {/* value column — Min / Max on their own rows, label beside the number */}
+          {!selling && toWin && Math.abs(toWin.hi - toWin.lo) >= 0.01 ? (
+            <div className="shrink-0 space-y-1">
+              <div className="flex items-baseline justify-end gap-1.5">
+                <span className="text-xs text-neutral-500">Min</span>
+                <span className="text-4xl tabular-nums text-emerald-400">${toWin.lo.toFixed(2)}</span>
+              </div>
+              <div className="flex items-baseline justify-end gap-1.5">
+                <span className="text-xs text-neutral-500">Max</span>
+                <span className="text-4xl tabular-nums text-emerald-400">${toWin.hi.toFixed(2)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="shrink-0 text-4xl tabular-nums text-emerald-400">{winValue}</div>
+          )}
         </div>
       )}
 
