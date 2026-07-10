@@ -319,7 +319,8 @@ export function PredictionSlip({
             value={amountText}
             onChange={(e) => setAmountText(e.target.value.replace(/[^0-9.]/g, ""))}
             inputMode="decimal"
-            className="w-28 bg-transparent text-right text-3xl font-semibold tabular-nums outline-none"
+            size={Math.max(amountText.length, 1)}
+            className="min-w-[1ch] bg-transparent text-right text-3xl font-semibold tabular-nums outline-none"
           />
           {selling && <span className="text-sm text-neutral-500">sh</span>}
         </div>
