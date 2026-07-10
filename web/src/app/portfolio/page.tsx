@@ -248,7 +248,7 @@ export default function PortfolioPage() {
                     const st = ticketState(g, side);
                     return (
                       <tr key={`t${side}`} className="border-t border-neutral-900 first:border-t-0">
-                        <td className="px-4 py-2.5">{sideName(side)} tickets</td>
+                        <td className="px-4 py-2.5">{sideName(side)} shares</td>
                         <td className="px-4 py-2.5 tabular-nums">{formatUsdc(held)} held</td>
                         <td className={`px-4 py-2.5 ${st.cls}`}>{st.label}</td>
                         <td className="px-4 py-2.5 text-right">
@@ -258,7 +258,7 @@ export default function PortfolioPage() {
                                 run(
                                   `redeem-${id}-${side}`,
                                   () => buildRedeemXdr(address, BigInt(id), side, held),
-                                  `Redeemed ${sideName(side)} tickets on #${id}`,
+                                  `Redeemed ${sideName(side)} shares on #${id}`,
                                 )
                               }
                               disabled={busy !== null}
@@ -297,8 +297,8 @@ export default function PortfolioPage() {
         })
       )}
       <p className="text-xs text-neutral-600">
-        States refresh from chain every 15s. Ticket rows show your live balance —
-        including tickets bought on the DEX. Redemptions and conviction claims are
+        States refresh from chain every 15s. Share rows show your live balance —
+        including shares bought on the DEX. Redemptions and conviction claims are
         pull-based; funds stay in the market contract until you collect.
       </p>
     </div>

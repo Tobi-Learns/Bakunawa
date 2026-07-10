@@ -26,8 +26,8 @@ export default function HowItWorksPage() {
           kinds of prediction share a single pool.
         </p>
         <p>
-          A <b>regular prediction</b> backs just the winner. You mint tradable pool
-          tickets at par ($1 = $1 of stake) and can <b>buy and sell anytime before
+          A <b>neutral prediction</b> backs just the winner — neutral on the margin. You mint tradable pool
+          shares at par ($1 = $1 of stake) and can <b>buy and sell anytime before
           lock</b>{" "}
           on Stellar&apos;s DEX — buy at 0.55, sell at 0.80 on news, cash out
           your gains before the event even settles, exactly like an order-book prediction
@@ -51,7 +51,7 @@ export default function HowItWorksPage() {
           (LosingPool − Fee)
         </pre>
         <p>
-          Regular tickets carry weight 1.0. A conviction&apos;s multiplier is the inverse
+          Neutral shares carry weight 1.0. A conviction&apos;s multiplier is the inverse
           of how much of your side&apos;s money went at least as aggressive as you —{" "}
           <b>S(m)</b>. Rare calls earn bigger multipliers, priced entirely by where the
           crowd put its money and self-balancing as stakes move.
@@ -60,10 +60,10 @@ export default function HowItWorksPage() {
 
       <Section title="The variance transfer (shown, not hidden)">
         <p>
-          The two classes trade variance with each other. Regulars are structurally short
+          The two classes trade variance with each other. Neutrals are structurally short
           the convictions on their side: they <b>outperform</b> a plain winner market when
           convictions die (their banked stakes swell the pool), and <b>underperform</b>{" "}
-          when a conviction lands and takes its share. Every ticket shows the open
+          when a conviction lands and takes its share. Every share shows the open
           conviction exposure circling its side — the &quot;sharks circling.&quot; Nothing
           about the trade is hidden.
         </p>

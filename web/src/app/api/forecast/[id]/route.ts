@@ -41,16 +41,16 @@ export async function GET(
         closeTs: market.closeTs,
         settleTs: market.settleTs,
         generatedAt: Math.floor(Date.now() / 1000),
-        note: "Crowd-implied margin distribution inverted from on-chain pool state. Not fixed odds.",
+        note: "pWin = each side's share of the total pooled stake (the two sides sum to ~1). breakdown = within a side, each rung's share of that side's money (margin 0 = Neutral shares), summing to ~1. Crowd money shares read from on-chain pool state — not fixed odds, not a statistical likelihood.",
         sides: forecast.sides.map((f) => ({
           side: f.side,
           name: sideName(f.side),
           pWin: Number(f.pWin.toFixed(4)),
-          survival: f.survival.map((s) => ({
+          breakdown: f.breakdown.map((s) => ({
             margin: s.rung,
             label:
               s.rung === 0
-                ? "wins"
+                ? "neutral"
                 : marginUnit === "percent_x100"
                   ? `by >= ${(s.rung / 100).toFixed(2)}%`
                   : `by >= ${s.rung}`,

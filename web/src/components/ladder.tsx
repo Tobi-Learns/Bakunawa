@@ -19,7 +19,7 @@ function fmtRoi(roi: number): string {
 }
 
 function rungLabel(market: MarketView, rung: number): string {
-  if (rung === 0) return "Regular · tickets";
+  if (rung === 0) return "Neutral · shares";
   if (market.oracle === "Reflector") return `≥ ${(rung / 100).toFixed(2)}%`;
   return `≥ ${rung}`;
 }
@@ -104,7 +104,7 @@ export function Ladder({
                 ? "Result"
                 : status === "Locked" || status === "Settling"
                   ? "If settled now"
-                  : "Implied payout"}
+                  : "Implied payout for $1"}
             </th>
           </tr>
         </thead>
@@ -126,7 +126,7 @@ export function Ladder({
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="w-20 shrink-0 tabular-nums">
-                      {formatUsdc(stake)}
+                      ${formatUsdc(stake)}
                     </span>
                     <span className="h-1.5 flex-1 overflow-hidden rounded bg-neutral-900">
                       <span

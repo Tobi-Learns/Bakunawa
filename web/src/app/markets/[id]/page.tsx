@@ -88,7 +88,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
       {status === "Open" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-900 bg-emerald-950/30 px-4 py-3 text-sm">
           <span>
-            Predictions open — lock in{" "}
+            Predictions open — closes in{" "}
             <b>
               <Countdown to={market.closeTs} />
             </b>{" "}
@@ -160,7 +160,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {/* Win probability over time — the headline visual, top of the page */}
-      <WinProbabilityCard market={market} />
+      <WinProbabilityCard market={market} ladder={ladder} />
 
       {/* Crowd forecast — current snapshot (inverted from pool state) */}
       {ladder.length > 0 && <CrowdForecast market={market} ladder={ladder} />}

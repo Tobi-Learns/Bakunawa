@@ -68,6 +68,19 @@ function stepPath(pts: { t: number; v: number }[], s: Scale): string {
   return d;
 }
 
+/** Straight-line (piecewise-linear) path through (t, v) points — reads as a
+ *  continuous trend rather than discrete steps (used for the win-probability
+ *  headline, Polymarket-style). */
+function linePath(pts: { t: number; v: number }[], s: Scale): string {
+  if (pts.length === 0) return "";
+  let d = `M ${s.x(pts[0].t).toFixed(1)} ${s.y(pts[0].v).toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    d += ` L ${s.x(pts[i].t).toFixed(1)} ${s.y(pts[i].v).toFixed(1)}`;
+  }
+  d += ` L ${(W - PAD.r).toFixed(1)} ${s.y(pts[pts.length - 1].v).toFixed(1)}`; // hold to "now"
+  return d;
+}
+
 function Frame({
   scale,
   yFmt,
@@ -287,7 +300,7 @@ export function WinProbabilityChart({
       <svg ref={ref} viewBox={`0 0 ${W} ${H}`} className="w-full" onPointerMove={onMove} onPointerLeave={onLeave}>
         <Frame scale={scale} yFmt={(v) => `${v.toFixed(0)}%`}>
           {series.map((s) => (
-            <path key={s.side} d={stepPath(s.pts, scale)} fill="none" stroke={s.color} strokeWidth={2} />
+            <path key={s.side} d={linePath(s.pts, scale)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" />
           ))}
           {(() => {
             // nudge apart when the two lines end at (nearly) the same value
@@ -337,7 +350,7 @@ export function RungHistoryChart({
   const [side, setSide] = useState(0);
   const allRungs = useMemo(() => [0, ...rungs], [rungs]);
   const label = (r: number) =>
-    r === 0 ? "Regular" : oracle === "Reflector" ? `≥${(r / 100).toFixed(r % 100 ? 2 : 0)}%` : `≥${r}`;
+    r === 0 ? "Neutral" : oracle === "Reflector" ? `≥${(r / 100).toFixed(r % 100 ? 2 : 0)}%` : `≥${r}`;
 
   const series = useMemo(
     () =>

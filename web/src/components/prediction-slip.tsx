@@ -74,7 +74,7 @@ export function PredictionSlip({
   const sideName = (s: number) => (s === 0 ? market.sideA : market.sideB);
   const rungLabel = (rung: number) =>
     rung === 0
-      ? "None (regular)"
+      ? "None (neutral)"
       : market.oracle === "Reflector"
         ? `≥ ${(rung / 100).toFixed(2)}%`
         : `≥ ${rung}`;
@@ -194,7 +194,7 @@ export function PredictionSlip({
       >
         {mode === "prediction" ? (
           <>
-            <b>Regular prediction</b> — mints tradable {sideName(selected.side)} tickets
+            <b>Neutral prediction</b> — mints tradable {sideName(selected.side)} shares
             at par. Sell anytime before lock on the DEX; settlement pays whoever holds
             them.
           </>
@@ -263,13 +263,13 @@ export function PredictionSlip({
           : busy
             ? phase.what
             : mode === "prediction"
-              ? "Mint tickets"
+              ? "Mint shares"
               : "Lock conviction"}
       </button>
 
       {phase.step === "done" && (
         <p className="mt-3 text-sm text-emerald-400">
-          {phase.kind === "prediction" ? "Tickets minted" : "Conviction locked"} —{" "}
+          {phase.kind === "prediction" ? "Shares minted" : "Conviction locked"} —{" "}
           <a
             href={explorerTxUrl(phase.txHash)}
             target="_blank"
