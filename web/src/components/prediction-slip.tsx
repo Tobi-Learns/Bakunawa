@@ -250,6 +250,22 @@ export function PredictionSlip({
 
   return (
     <div className="rounded-lg border border-neutral-800 p-4">
+      {/* Title — market + selected outcome */}
+      <div className="mb-3">
+        <div className="text-xs text-neutral-500">
+          {market.oracle === "Reflector"
+            ? `${market.asset} · ${sideName(0)} vs ${sideName(1)}`
+            : `${sideName(0)} vs ${sideName(1)}`}
+        </div>
+        <div className="text-base font-semibold">
+          {sideName(selected.side)}
+          <span className="font-normal text-neutral-500">
+            {" "}
+            · {selling ? "Sell" : selected.rung === 0 ? "Neutral" : rungLabel(selected.rung)}
+          </span>
+        </div>
+      </div>
+
       {/* Buy / Sell tabs */}
       <div className="mb-4 flex items-center justify-between border-b border-neutral-800">
         <div className="flex gap-4">
@@ -313,16 +329,16 @@ export function PredictionSlip({
       {/* Amount */}
       <div className="flex items-center justify-between">
         <span className="text-neutral-400">Amount</span>
-        <div className="flex items-baseline gap-1">
-          {!selling && <span className="text-2xl font-semibold text-neutral-500">$</span>}
+        <div className="flex items-baseline">
+          {!selling && <span className="text-4xl font-semibold text-neutral-500">$</span>}
           <input
             value={amountText}
             onChange={(e) => setAmountText(e.target.value.replace(/[^0-9.]/g, ""))}
             inputMode="decimal"
             size={Math.max(amountText.length, 1)}
-            className="min-w-[1ch] bg-transparent text-right text-3xl font-semibold tabular-nums outline-none"
+            className="min-w-[1ch] bg-transparent text-4xl font-semibold tabular-nums outline-none [field-sizing:content]"
           />
-          {selling && <span className="text-sm text-neutral-500">sh</span>}
+          {selling && <span className="ml-1 text-base text-neutral-500">sh</span>}
         </div>
       </div>
       <div className="mb-4 mt-2 flex justify-end gap-2">
@@ -337,23 +353,27 @@ export function PredictionSlip({
         ))}
       </div>
 
-      {/* To win / Proceeds */}
-      <div className="flex items-end justify-between border-t border-neutral-800 pt-4">
-        <div>
-          <div className="text-neutral-300">{selling ? "Proceeds" : "To win 💵"}</div>
-          <div className="flex items-center gap-1 text-xs text-neutral-500">
-            {winSub}
-            <InfoDot
-              text={
-                selling
-                  ? `Fills at market against the best bid on Stellar's DEX (${code}). Any unfilled remainder rests as an offer.`
-                  : winNote
-              }
-            />
+      {/* To win / Proceeds — only once there's an amount */}
+      {amt > 0 && (
+        <div className="flex items-end justify-between gap-3 border-t border-neutral-800 pt-4">
+          <div className="min-w-0">
+            <div className="text-neutral-300">{selling ? "Proceeds" : "To win 💵"}</div>
+            <div className="flex items-center gap-1 text-xs text-neutral-500">
+              {winSub}
+              <InfoDot
+                text={
+                  selling
+                    ? `Fills at market against the best bid on Stellar's DEX (${code}). Any unfilled remainder rests as an offer.`
+                    : winNote
+                }
+              />
+            </div>
+          </div>
+          <div className="whitespace-nowrap text-4xl font-bold tabular-nums text-emerald-400">
+            {winValue}
           </div>
         </div>
-        <div className="text-2xl font-bold tabular-nums text-emerald-400">{winValue}</div>
-      </div>
+      )}
 
       <button
         onClick={submit}
