@@ -26,12 +26,14 @@ export default function HowItWorksPage() {
           kinds of prediction share a single pool.
         </p>
         <p>
-          A <b>neutral prediction</b> backs just the winner — neutral on the margin. You mint tradable pool
-          shares at par ($1 = $1 of stake) and can <b>buy and sell anytime before
-          lock</b>{" "}
+          A <b>neutral prediction</b> backs just the winner — neutral on the margin. You mint
+          tradable pool shares at the <b>live price</b> — the side&apos;s money-share, so the
+          heavier (more favored) side costs more per share and buying the under-backed side is
+          cheap. Early / contrarian money is rewarded; late piling of the near-certain side is
+          priced out. You can <b>buy and sell anytime before lock</b>{" "}
           on Stellar&apos;s DEX — buy at 0.55, sell at 0.80 on news, cash out
           your gains before the event even settles, exactly like an order-book prediction
-          market. Prices float with crowd sentiment and read as the live winner forecast.
+          market. The share price is the live winner forecast.
         </p>
         <p>
           A <b>conviction</b> backs the winner plus a minimum margin. It is{" "}
