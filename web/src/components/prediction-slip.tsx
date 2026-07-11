@@ -58,6 +58,12 @@ export function PredictionSlip({
     bid: null,
     ask: null,
   });
+  // Per-side blended Neutral price (reg_money / reg_shares), reconstructed from
+  // the indexed mint history — the contract redeems Neutral shares per share,
+  // not per dollar, and no view exposes RegularShares. Estimate; refreshed on
+  // mount (avgPrice drifts slowly, so pairing it with the live ladder money is
+  // robust to indexer lag).
+  const [avgPrice, setAvgPrice] = useState<(number | null)[] | null>(null);
 
   const selling = tab === "sell";
   const mode: "prediction" | "conviction" =
@@ -95,6 +101,19 @@ export function PredictionSlip({
     return () => clearInterval(t);
   }, [selling, loadBook]);
 
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/markets/${market.id}/shares`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => live && setAvgPrice(d.avgPrice))
+      .catch(() => {
+        /* share-based quote falls back to par when unavailable */
+      });
+    return () => {
+      live = false;
+    };
+  }, [market.id]);
+
   // --- Buy: amount is USDC (what mint_tickets takes) ---
   const stake = useMemo(() => {
     if (selling) return 0n;
@@ -119,12 +138,30 @@ export function PredictionSlip({
   }, [selling, ladder, selected, market.rungs, market.rakeBps, stake]);
   const mult = demandMult(ladder, selected.side, selected.rung);
   const rangePoint = range !== null && Math.abs(range.max - range.min) < 0.005;
-  // "To win" = gross payout if the side wins (principal + winnings), in USDC
+  // "To win" = gross payout if the side wins (principal + winnings), in USDC.
   const toWin = useMemo(() => {
     if (!range || stake <= 0n) return null;
-    const s = Number(stake) / 1e7;
-    return { lo: s * (1 + range.min), hi: s * (1 + range.max) };
-  }, [range, stake]);
+    const d = Number(stake) / 1e7;
+    const amp = { lo: 1 + range.min, hi: 1 + range.max };
+    // Convictions are par-staked in USDC — dollars in, dollars-weighted out.
+    if (selected.rung !== 0 || !neutralQuote) {
+      return { lo: d * amp.lo, hi: d * amp.hi };
+    }
+    // Neutral shares are DPM-priced and redeemed PER SHARE, not per dollar
+    // (contract redeem: payout = shares/reg_shares × reg_money × amp). Value the
+    // shares you actually receive against the side's blended price, so the
+    // favorite (pricier shares, fewer of them per $) wins less than the
+    // underdog for the same stake — the difference the old dollar quote hid.
+    const regMoney0 =
+      Number(ladder.find((r) => r.side === selected.side && r.rung === 0)?.stake ?? 0n) /
+      1e7;
+    const avgP = avgPrice?.[selected.side] ?? null;
+    // reg_shares from the live Neutral money and the (slow-moving) blended price
+    const regShares0 = avgP && avgP > 0 ? regMoney0 / avgP : regMoney0; // par fallback
+    const perShare = (regMoney0 + d) / (regShares0 + neutralQuote.shares);
+    const base = neutralQuote.shares * perShare; // your money-backing at settlement
+    return { lo: base * amp.lo, hi: base * amp.hi };
+  }, [range, stake, selected.rung, selected.side, neutralQuote, ladder, avgPrice]);
 
   const bidN = book.bid ? Number(book.bid) : null;
   const sellShares = selling ? amt : 0;
