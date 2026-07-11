@@ -3,8 +3,9 @@
 // plot — pool size and per-rung implied payout from listing to lock. Pure
 // function over DB rows; reuses the same parimutuel math the live UI shows.
 
-import { impliedRoi, type LadderRow } from "./parimutuel";
+import { impliedRange, type LadderRow } from "./parimutuel";
 import { crowdForecast } from "./forecast";
+import { sharesForDollars } from "./dpm";
 
 export interface ReplayEvent {
   side: number;
@@ -27,6 +28,14 @@ export interface SeriesPoint {
 }
 
 const MAX_POINTS = 300;
+
+// Display cap on the replayed per-rung ROI, matching the sim's ×50 tail cap.
+// A marginal-$1 quote on a thinly-backed rung is a real parimutuel boundary
+// (nearly the sole winner takes most of the losing pool) but explodes to
+// thousands of % and pins the chart's y-axis. The mature ladder tops out well
+// under ×50, so the cap clips only the unstable thin-rung spikes. Profit per
+// unit, so ×50 payout = +4900% ROI = 49.
+const ROI_CAP = 49;
 
 export function replaySeries(
   rungs: number[],
@@ -63,11 +72,30 @@ export function replaySeries(
       t: Math.floor(e.at.getTime() / 1000),
       pool: pool.toString(),
       quotes: allRungs.flatMap((rung) =>
-        [0, 1].map((side) => ({
-          side,
-          rung,
-          roi: impliedRoi(snapshot, side, rung, rakeBps),
-        })),
+        [0, 1].map((side) => {
+          // Two guards make this chart honest and readable:
+          // (1) Use the conservative (min) end of the implied-payout RANGE, not
+          //     the lone optimistic figure. The optimistic quote assumes the
+          //     side wins by a hair so every deeper same-side conviction dies
+          //     and banks — on a conviction-heavy pool that sends a marginal-$1
+          //     Neutral quote to +80,000%+ (bug B2 / same family as B1). The
+          //     min end (all same-side convictions land and take their cut) is
+          //     a true lower bound.
+          // (2) Skip a rung with no same-side stake at rung-and-deeper (the
+          //     quote would be a pure probe artifact), and cap the rest at the
+          //     sim's ×50 tail cap so a thinly-backed deep rung can't pin the
+          //     axis at hundreds of thousands of %.
+          const sReal = snapshot
+            .filter((r) => r.side === side && r.rung >= rung)
+            .reduce((a, r) => a + r.stake, 0n);
+          if (sReal <= 0n) return { side, rung, roi: null };
+          const min = impliedRange(snapshot, side, rung, rungs, rakeBps)?.min;
+          return {
+            side,
+            rung,
+            roi: min == null ? null : Math.min(min, ROI_CAP),
+          };
+        }),
       ),
       win:
         twoSided && fc
@@ -87,4 +115,37 @@ export function replaySeries(
     return thinned;
   }
   return points;
+}
+
+/**
+ * Reconstruct each side's total Neutral (regular) money and DPM share count by
+ * replaying the indexed mint history. The contract mints
+ * `dpm_shares(side_stake(side), side_stake(other), amount)` per mint and tracks
+ * `RegularShares(id, side)` — which no view exposes — so the slip can't read it.
+ * It needs the side's blended price (reg_money / reg_shares) to value a Neutral
+ * position the way `redeem` pays it: per SHARE, not per dollar (the favorite's
+ * pricier shares must win less than the underdog's for the same stake).
+ * Float mirror of the contract's integer math — an estimate, like the rest of
+ * the slip's live quote; the contract stays authoritative on submit.
+ */
+export function regularShareTotals(
+  events: ReplayEvent[],
+): { money: number; shares: number }[] {
+  const sideTotal = [0, 0]; // running total side stake (USDC) — the DPM basis
+  const money = [0, 0];
+  const shares = [0, 0];
+  const sorted = [...events].sort((a, b) => a.at.getTime() - b.at.getTime());
+  for (const e of sorted) {
+    const amt = Number(e.stake) / 1e7;
+    if (e.rung === 0) {
+      // rung 0 = a Neutral mint: shares priced off the side stakes BEFORE it
+      shares[e.side] += sharesForDollars(sideTotal[e.side], sideTotal[1 - e.side], amt);
+      money[e.side] += amt;
+    }
+    sideTotal[e.side] += amt; // convictions grow the DPM basis but mint no shares
+  }
+  return [
+    { money: money[0], shares: shares[0] },
+    { money: money[1], shares: shares[1] },
+  ];
 }
