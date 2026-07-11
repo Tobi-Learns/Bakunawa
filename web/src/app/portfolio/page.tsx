@@ -46,6 +46,27 @@ function fmtRoi(roi: number) {
   return `+${(roi * 100).toFixed(1)}%`;
 }
 
+function fmtRange(r: { min: number; max: number }): string {
+  return Math.abs(r.max - r.min) < 0.005 ? fmtRoi(r.max) : `${fmtRoi(r.min)} – ${fmtRoi(r.max)}`;
+}
+
+/**
+ * Open-market implied payout is a RANGE, not one number: a nested-threshold
+ * pool pays differently depending on the final margin (same rule the ladder
+ * and prediction slip obey). The position is already in the pool, so settle it
+ * in place (no marginal probe) at the two boundary outcomes:
+ *   max = side wins by exactly `rung` — deeper same-side convictions die + bank
+ *   min = side wins by the largest listed rung — every same-side conviction lands
+ * Collapses to a point for the top rung / a market with no convictions.
+ */
+function openRange(g: Group, side: number, rung: number): { min: number; max: number } | null {
+  const maxRung = g.market.rungs.length ? Math.max(rung, ...g.market.rungs) : rung;
+  const best = outcomeRung(g.ladder, side, rung, side, rung, g.market.rakeBps);
+  const worst = outcomeRung(g.ladder, side, maxRung, side, rung, g.market.rakeBps);
+  if (best.state !== "won" || worst.state !== "won") return null;
+  return { min: Math.min(best.roi, worst.roi), max: Math.max(best.roi, worst.roi) };
+}
+
 function convictionState(g: Group, p: PositionView): { label: string; cls: string } {
   const render = (rs: RungState, suffix: string) =>
     rs.state === "won"
@@ -72,7 +93,11 @@ function convictionState(g: Group, p: PositionView): { label: string; cls: strin
       "if settled now",
     );
   }
-  return render(outcomeRung(g.ladder, p.side, p.rung, p.side, p.rung, g.market.rakeBps), "if settled now");
+  // Open, no live outcome yet: the payout is a RANGE, not the lone optimistic figure.
+  const range = openRange(g, p.side, p.rung);
+  return range
+    ? { label: `${fmtRange(range)} if it wins`, cls: "text-emerald-400" }
+    : { label: "—", cls: "text-neutral-500" };
 }
 
 function ticketState(g: Group, side: number): { label: string; cls: string; redeemable: boolean } {
@@ -88,22 +113,30 @@ function ticketState(g: Group, side: number): { label: string; cls: string; rede
       redeemable: true,
     };
   }
-  const outcomeNow =
-    g.move?.winningSide != null && (g.status === "Locked" || g.status === "Settling")
-      ? outcomeRung(g.ladder, g.move.winningSide, g.move.units, side, 0, g.market.rakeBps)
-      : outcomeRung(g.ladder, side, 0, side, 0, g.market.rakeBps);
   // "sharks circling": open conviction money on the ticket's own side — the
   // variance regulars are structurally short (they underperform if it lands).
   const sharks = g.ladder
     .filter((r) => r.side === side && r.rung > 0)
     .reduce((a, r) => a + r.stake, 0n);
   const sharkNote = sharks > 0n ? ` · 🦈 ${formatUsdc(sharks)} in convictions circling` : "";
+  // Locked/Settling with a live oracle move: a concrete outcome → single number.
+  if (g.move?.winningSide != null && (g.status === "Locked" || g.status === "Settling")) {
+    const outcomeNow = outcomeRung(g.ladder, g.move.winningSide, g.move.units, side, 0, g.market.rakeBps);
+    return {
+      label:
+        (outcomeNow.state === "won"
+          ? `${fmtRoi(outcomeNow.roi)} if settled now · tradable`
+          : "losing now · tradable") + sharkNote,
+      cls: outcomeNow.state === "won" ? "text-neutral-200" : "text-neutral-500",
+      redeemable: false,
+    };
+  }
+  // Open: implied payout is a RANGE. Rung-0 shares see the widest spread —
+  // they're structurally short every same-side conviction.
+  const range = openRange(g, side, 0);
   return {
-    label:
-      (outcomeNow.state === "won"
-        ? `${fmtRoi(outcomeNow.roi)} if settled now · tradable`
-        : "losing now · tradable") + sharkNote,
-    cls: outcomeNow.state === "won" ? "text-neutral-200" : "text-neutral-500",
+    label: (range ? `${fmtRange(range)} if it wins · tradable` : "tradable") + sharkNote,
+    cls: range ? "text-neutral-200" : "text-neutral-500",
     redeemable: false,
   };
 }
@@ -297,9 +330,12 @@ export default function PortfolioPage() {
         })
       )}
       <p className="text-xs text-neutral-600">
-        States refresh from chain every 15s. Share rows show your live balance —
-        including shares bought on the DEX. Redemptions and conviction claims are
-        pull-based; funds stay in the market contract until you collect.
+        States refresh from chain every 15s. Open positions show a min–max range
+        because the payout depends on the final margin — deeper same-side
+        convictions bank into your share when they miss and take a cut when they
+        land. Share rows show your live balance — including shares bought on the
+        DEX. Redemptions and conviction claims are pull-based; funds stay in the
+        market contract until you collect.
       </p>
     </div>
   );
