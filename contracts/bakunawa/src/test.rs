@@ -1,10 +1,13 @@
 #![cfg(test)]
-//! Contract tests (v4). The hand-settled worked example is still the
-//! settlement reference — v4 restores v2's shared-pool math, so the expected
-//! numbers are unchanged; regular predictions (A, F) now enter via ticket
-//! minting and exit via `redeem`, convictions via `place_conviction`/`claim`.
-//! New v4 coverage: tickets that changed hands settle to the HOLDER,
-//! mint-after-lock, losing-side redeem, cancel refunds via both paths.
+//! Contract tests (v4 + 1.13 unified shares). Every buy is DPM-priced; the
+//! reference is sim/unified.py `worked_example()` — replicated exactly in
+//! `unified_worked_example_seeded_ladder`. The OKC/SAS scenarios still exercise
+//! the settlement math, but under the unified model their convictions sit on
+//! COLD rungs (one buyer each, shallow->deep), so they bootstrap at par
+//! (shares==stake): payouts are exact integers, just flat (no depth reward
+//! without a rung seed — the 1.13a finding). Coverage: DPM-priced convictions,
+//! uniform share settlement, banking, traded tickets settle to the HOLDER,
+//! after-lock rejection, losing-side redeem, cancel via both paths.
 
 use super::*;
 use crate::reflector::{PriceData, ReflectorAsset};
@@ -146,6 +149,15 @@ fn assert_close(actual: i128, expected: i128, tol: i128, label: &str) {
     );
 }
 
+/// Relative tolerance (in percent) — for DPM payouts that carry fixed-point-ln
+/// error vs the float sim reference.
+fn assert_rel(actual: i128, expected: i128, pct: i128, label: &str) {
+    assert!(
+        (actual - expected).abs() * 100 <= expected * pct,
+        "{label}: got {actual}, expected ~{expected} (+/-{pct}%)"
+    );
+}
+
 // --- Worked example scenarios (settlement math unchanged under v4) ---
 
 #[test]
@@ -158,14 +170,15 @@ fn scenario_1_okc_by_12() {
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &12);
 
-    // Engine reference: A 407.9207921 (regular, via redeem), B 263.3663366,
-    // C 328.7128713 USDC (convictions, via claim).
+    // Unified model, cold rungs -> par shares: winners A(reg 200sh), B(+5,100sh),
+    // C(+10,100sh) split $600 losing pool by share. A = 200 + 200*600/400 = 500;
+    // B = C = 100 + 100*600/400 = 250 (flat: no rung seed => no depth reward).
     let pay_a = s.client.redeem(&p[0], &1, &0, &(200 * USDC));
     let pay_b = s.client.claim(&p[1], &1);
     let pay_c = s.client.claim(&p[2], &1);
-    assert_close(pay_a, 4_079_207_921, 3, "A payout");
-    assert_close(pay_b, 2_633_663_366, 3, "B payout");
-    assert_close(pay_c, 3_287_128_712, 3, "C payout");
+    assert_close(pay_a, 5_000_000_000, 3, "A payout");
+    assert_close(pay_b, 2_500_000_000, 3, "B payout");
+    assert_close(pay_c, 2_500_000_000, 3, "C payout");
 
     // Dead convictions (D, E) and the whole SAS side lose; F's tickets are
     // losing-side => redeem refuses.
@@ -188,9 +201,11 @@ fn scenario_3_long_shot_by_33() {
     let (p, ..) = worked_example(&s, 1, 0);
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &33);
-    // Everyone on OKC wins. Engine: E +331.37% (multiplier != odds).
+    // Everyone on OKC wins; cold rungs -> par. sum_shares = 200+100+100+100+50
+    // = 550; dist = 450. E(+30, 50 par sh) = 50 + 50*450/550 = 90.909 USDC
+    // (flat ladder without a rung seed).
     let pay_e = s.client.claim(&p[4], &1);
-    assert_close(pay_e, 2_156_837_743, 3, "E payout");
+    assert_close(pay_e, 909_090_909, 3, "E payout");
     let mut total = pay_e + s.client.redeem(&p[0], &1, &0, &(200 * USDC));
     for w in [&p[1], &p[2], &p[3]] {
         total += s.client.claim(w, &1);
@@ -198,6 +213,81 @@ fn scenario_3_long_shot_by_33() {
     let dust = s.token.balance(&s.client.address);
     assert_eq!(total + dust, 1_000 * USDC);
     assert!(dust < 5);
+}
+
+/// The canonical UNIFIED worked example — mirrors sim/unified.py
+/// `worked_example()` exactly: house seed (Neutral both sides + a rung-
+/// distributed UP seed), then ordered DPM buys, settle UP by 10 so the >=20
+/// rung dies and banks. Validates the whole unified path: DPM-priced
+/// convictions, the depth reward in the buy price, early > late at a rung, one
+/// uniform share split, banking, losing side, and EXACT conservation.
+#[test]
+fn unified_worked_example_seeded_ladder() {
+    let s = setup();
+    let feed = s.client.address.clone();
+    let (ta, _tb) = create_market(&s, 30, &[10, 20], OracleKind::Admin, &feed, 300, 0);
+
+    let mint = |who: &Address, side: u32, amt: i128| {
+        s.sac.mint(who, &amt);
+        s.client.mint_tickets(who, &30, &side, &amt);
+    };
+    let convict = |who: &Address, side: u32, rung: u32, amt: i128| {
+        s.sac.mint(who, &amt);
+        s.client.place_conviction(who, &30, &side, &rung, &amt);
+    };
+
+    // Seed (par): UP Neutral 20, DOWN Neutral 20, UP>=10 4, UP>=20 2
+    let hun = Address::generate(&s.env);
+    mint(&hun, 0, 20 * USDC);
+    let hdn = Address::generate(&s.env);
+    mint(&hdn, 1, 20 * USDC);
+    let h10 = Address::generate(&s.env);
+    convict(&h10, 0, 10, 4 * USDC);
+    let h20 = Address::generate(&s.env);
+    convict(&h20, 0, 20, 2 * USDC);
+    // Ordered buys (DPM is order-dependent)
+    let p1 = Address::generate(&s.env);
+    mint(&p1, 0, 10 * USDC); // UP Neutral
+    let p2 = Address::generate(&s.env);
+    convict(&p2, 0, 10, 10 * USDC); // early >=10
+    let p3 = Address::generate(&s.env);
+    convict(&p3, 0, 20, 10 * USDC); // >=20, will bank
+    let p5 = Address::generate(&s.env);
+    convict(&p5, 0, 10, 10 * USDC); // late >=10
+    let p4 = Address::generate(&s.env);
+    mint(&p4, 1, 20 * USDC); // DOWN Neutral
+
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.settle_admin(&30, &0, &10); // UP by 10: >=20 banks, DOWN loses
+
+    // Convictions >=10 win; early out-earns late; the reference values (from the
+    // float sim) hold to within fixed-point-ln tolerance.
+    let pay_p2 = s.client.claim(&p2, &30);
+    let pay_p5 = s.client.claim(&p5, &30);
+    assert!(pay_p2 > pay_p5, "early >=10 {pay_p2} should beat late {pay_p5}");
+    assert_rel(pay_p2, 298_774_000, 2, "P2 (early >=10) payout"); // 29.8774
+    assert_rel(pay_p5, 188_447_000, 2, "P5 (late >=10) payout"); //  18.8447
+    let pay_h10 = s.client.claim(&h10, &30);
+
+    // >=20 rung is dead (banked) on the winning side — claims rejected.
+    assert!(s.client.try_claim(&p3, &30).is_err(), ">=20 banked (p3)");
+    assert!(s.client.try_claim(&h20, &30).is_err(), ">=20 banked (seed)");
+    // DOWN loses; its tickets can't redeem.
+    assert!(s.client.try_redeem(&p4, &30, &1, &(20 * USDC)).is_err(), "DOWN loses");
+
+    // Regular UP holders redeem (class-average money-backing per share + slice).
+    let tok = TokenClient::new(&s.env, &ta);
+    let pay_p1 = s.client.redeem(&p1, &30, &0, &tok.balance(&p1));
+    let pay_hun = s.client.redeem(&hun, &30, &0, &tok.balance(&hun));
+    assert_rel(pay_p1, 143_221_000, 2, "P1 (UP Neutral) payout"); // 14.3221
+    assert_rel(pay_hun, 347_025_000, 2, "seed UP Neutral payout"); // 34.7025
+
+    // EXACT conservation: every payout + rake + dust == the $106 pool.
+    let treasury = s.token.balance(&s.treasury);
+    let dust = s.token.balance(&s.client.address);
+    let paid = pay_p2 + pay_p5 + pay_h10 + pay_p1 + pay_hun;
+    assert_eq!(paid + treasury + dust, 106 * USDC, "conservation");
+    assert!(dust >= 0 && dust < 10, "dust {dust}");
 }
 
 // --- v4-specific coverage ---
@@ -214,11 +304,12 @@ fn traded_tickets_settle_to_the_holder() {
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &12);
 
-    // Each 100-ticket half redeems to half of A's reference payout.
+    // A's full 200-ticket redeem is 500 USDC (unified), so each 100-ticket half
+    // redeems to 250 — the claim follows the tickets regardless of who holds them.
     let pay_x = s.client.redeem(&x, &1, &0, &(100 * USDC));
     let pay_a = s.client.redeem(&p[0], &1, &0, &(100 * USDC));
-    assert_close(pay_x, 4_079_207_921 / 2, 3, "X (buyer) payout");
-    assert_close(pay_a, 4_079_207_921 / 2, 3, "A (seller kept half) payout");
+    assert_close(pay_x, 2_500_000_000, 3, "X (buyer) payout");
+    assert_close(pay_a, 2_500_000_000, 3, "A (seller kept half) payout");
     // A can't redeem more than he holds.
     assert!(s.client.try_redeem(&p[0], &1, &0, &(1 * USDC)).is_err());
 }
@@ -250,9 +341,9 @@ fn rake_comes_off_losing_pool() {
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &12);
     assert_eq!(s.token.balance(&s.treasury), 18 * USDC); // 3% of $600
-    // Engine with rake: A payout 401.6831683 USDC.
+    // Unified raked: dist = 600 - 18 = 582; A = 200 + 200*582/400 = 491 USDC.
     let pay_a = s.client.redeem(&p[0], &1, &0, &(200 * USDC));
-    assert_close(pay_a, 4_016_831_683, 3, "A raked payout");
+    assert_close(pay_a, 4_910_000_000, 3, "A raked payout");
     let pay_b = s.client.claim(&p[1], &1);
     let pay_c = s.client.claim(&p[2], &1);
     let dust = s.token.balance(&s.client.address);
