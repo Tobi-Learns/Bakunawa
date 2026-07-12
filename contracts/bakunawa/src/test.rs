@@ -164,16 +164,16 @@ fn assert_rel(actual: i128, expected: i128, pct: i128, label: &str) {
 fn scenario_1_okc_by_12() {
     let s = setup();
     let (p, ta, _tb) = worked_example(&s, 1, 0);
-    // A holds 200 USDC of side-0 tickets
-    assert_eq!(TokenClient::new(&s.env, &ta).balance(&p[0]), 200 * USDC);
+    // A minted $200 at $0.50/share -> holds 400 shares
+    assert_eq!(TokenClient::new(&s.env, &ta).balance(&p[0]), 400 * USDC);
 
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &12);
 
-    // Unified model, cold rungs -> par shares: winners A(reg 200sh), B(+5,100sh),
-    // C(+10,100sh) split $600 losing pool by share. A = 200 + 200*600/400 = 500;
-    // B = C = 100 + 100*600/400 = 250 (flat: no rung seed => no depth reward).
-    let pay_a = s.client.redeem(&p[0], &1, &0, &(200 * USDC));
+    // Unified, cold rungs -> par ($0.50/share): winners A(reg 400sh), B(+5,200sh),
+    // C(+10,200sh) split $600 losing pool by share. sum_shares=800; A = 200 +
+    // 400*600/800 = 500; B = C = 100 + 200*600/800 = 250 (flat, no depth reward).
+    let pay_a = s.client.redeem(&p[0], &1, &0, &(400 * USDC));
     let pay_b = s.client.claim(&p[1], &1);
     let pay_c = s.client.claim(&p[2], &1);
     assert_close(pay_a, 5_000_000_000, 3, "A payout");
@@ -201,12 +201,12 @@ fn scenario_3_long_shot_by_33() {
     let (p, ..) = worked_example(&s, 1, 0);
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &33);
-    // Everyone on OKC wins; cold rungs -> par. sum_shares = 200+100+100+100+50
-    // = 550; dist = 450. E(+30, 50 par sh) = 50 + 50*450/550 = 90.909 USDC
-    // (flat ladder without a rung seed).
+    // Everyone on OKC wins; cold rungs -> par ($0.50/share). sum_shares =
+    // 400+200+200+200+100 = 1100; dist = 450. E(+30, 100 par sh) = 50 +
+    // 100*450/1100 = 90.909 USDC (flat ladder without a rung seed).
     let pay_e = s.client.claim(&p[4], &1);
     assert_close(pay_e, 909_090_909, 3, "E payout");
-    let mut total = pay_e + s.client.redeem(&p[0], &1, &0, &(200 * USDC));
+    let mut total = pay_e + s.client.redeem(&p[0], &1, &0, &(400 * USDC));
     for w in [&p[1], &p[2], &p[3]] {
         total += s.client.claim(w, &1);
     }
@@ -299,15 +299,15 @@ fn traded_tickets_settle_to_the_holder() {
     // A sells half his tickets to X pre-lock (a DEX trade is just a token
     // transfer — the claim moves, the cash stays in the pot).
     let x = Address::generate(&s.env);
-    TokenClient::new(&s.env, &ta).transfer(&p[0], &x, &(100 * USDC));
+    TokenClient::new(&s.env, &ta).transfer(&p[0], &x, &(200 * USDC));
 
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &12);
 
-    // A's full 200-ticket redeem is 500 USDC (unified), so each 100-ticket half
+    // A's full 400-share redeem is 500 USDC (unified), so each 200-share half
     // redeems to 250 — the claim follows the tickets regardless of who holds them.
-    let pay_x = s.client.redeem(&x, &1, &0, &(100 * USDC));
-    let pay_a = s.client.redeem(&p[0], &1, &0, &(100 * USDC));
+    let pay_x = s.client.redeem(&x, &1, &0, &(200 * USDC));
+    let pay_a = s.client.redeem(&p[0], &1, &0, &(200 * USDC));
     assert_close(pay_x, 2_500_000_000, 3, "X (buyer) payout");
     assert_close(pay_a, 2_500_000_000, 3, "A (seller kept half) payout");
     // A can't redeem more than he holds.
@@ -341,8 +341,9 @@ fn rake_comes_off_losing_pool() {
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&1, &0, &12);
     assert_eq!(s.token.balance(&s.treasury), 18 * USDC); // 3% of $600
-    // Unified raked: dist = 600 - 18 = 582; A = 200 + 200*582/400 = 491 USDC.
-    let pay_a = s.client.redeem(&p[0], &1, &0, &(200 * USDC));
+    // Unified raked: dist = 600 - 18 = 582; sum_shares=800; A = 200 +
+    // 400*582/800 = 491 USDC.
+    let pay_a = s.client.redeem(&p[0], &1, &0, &(400 * USDC));
     assert_close(pay_a, 4_910_000_000, 3, "A raked payout");
     let pay_b = s.client.claim(&p[1], &1);
     let pay_c = s.client.claim(&p[2], &1);
@@ -356,9 +357,10 @@ fn cancel_refunds_tickets_at_par_and_convictions_in_full() {
     let s = setup();
     let (p, ..) = worked_example(&s, 1, 300);
     s.client.cancel_market(&1);
-    // Regulars redeem at par (either side), convictions claim their stake.
-    assert_eq!(s.client.redeem(&p[0], &1, &0, &(200 * USDC)), 200 * USDC);
-    assert_eq!(s.client.redeem(&p[5], &1, &1, &(200 * USDC)), 200 * USDC);
+    // Regulars redeem at par (either side; 400 shares -> $200 money-backing),
+    // convictions claim their stake.
+    assert_eq!(s.client.redeem(&p[0], &1, &0, &(400 * USDC)), 200 * USDC);
+    assert_eq!(s.client.redeem(&p[5], &1, &1, &(400 * USDC)), 200 * USDC);
     let expected: [i128; 7] = [100, 100, 100, 50, 100, 100, 50];
     for (i, exp) in [1usize, 2, 3, 4, 6, 7, 8].iter().zip(expected) {
         assert_eq!(s.client.claim(&p[*i], &1), exp * USDC);
@@ -382,7 +384,7 @@ fn no_winning_positions_cancels() {
     s.client.settle_admin(&8, &0, &5); // A wins by 5: nobody wins => cancel
     assert_eq!(s.client.get_market(&8).status, MarketStatus::Cancelled);
     assert_eq!(s.client.claim(&x, &8), 100 * USDC);
-    assert_eq!(s.client.redeem(&y, &8, &1, &(100 * USDC)), 100 * USDC);
+    assert_eq!(s.client.redeem(&y, &8, &1, &(200 * USDC)), 100 * USDC); // 200 sh -> $100
 }
 
 #[test]
@@ -396,7 +398,7 @@ fn viability_empty_side_cancels() {
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
     s.client.settle_admin(&7, &0, &10); // empty side B => cancel
     assert_eq!(s.client.get_market(&7).status, MarketStatus::Cancelled);
-    assert_eq!(s.client.redeem(&solo, &7, &0, &(50 * USDC)), 50 * USDC);
+    assert_eq!(s.client.redeem(&solo, &7, &0, &(100 * USDC)), 50 * USDC); // 100 sh -> $50
 }
 
 // --- Reflector oracle path (unchanged mechanics, v4 entry points) ---
@@ -425,9 +427,9 @@ fn reflector_settles_up_move_with_tickets() {
 
     let out = s.client.get_outcome(&11);
     assert_eq!((out.winner, out.margin), (0, 500));
-    assert!(s.client.redeem(&up, &11, &0, &(100 * USDC)) > 100 * USDC);
+    assert!(s.client.redeem(&up, &11, &0, &(200 * USDC)) > 100 * USDC); // 200 sh
     assert!(s.client.claim(&up5, &11) > 50 * USDC); // exact hit
-    assert!(s.client.try_redeem(&down, &11, &1, &(100 * USDC)).is_err());
+    assert!(s.client.try_redeem(&down, &11, &1, &(200 * USDC)).is_err());
     assert_eq!(s.token.balance(&s.treasury), 3 * USDC); // 3% of $100
 }
 
@@ -519,7 +521,7 @@ fn dpm_cancel_refunds_money_backing_by_share() {
     s.client.cancel_market(&21);
     let refund_buyer = s.client.redeem(&buyer, &21, &0, &sh_buyer);
     let refund_seed = s.client.redeem(&seed_a, &21, &0, &tok.balance(&seed_a));
-    let refund_b = s.client.redeem(&seed_b, &21, &1, &(50 * USDC));
+    let refund_b = s.client.redeem(&seed_b, &21, &1, &(100 * USDC)); // 100 sh -> $50
 
     // OKC's $50 and SAS's $50 each returned in full (split per share on OKC).
     assert_close(refund_buyer + refund_seed, 50 * USDC, 5, "OKC money returned");

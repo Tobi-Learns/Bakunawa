@@ -45,32 +45,31 @@ import random
 
 
 def price(m_side: float, m_other: float) -> float:
-    """MINT price per share on a side = 2 * its money-share, so a 50/50 book
-    prices at par ($1, matching the house seed) and rises to $2 as the side
-    approaches certainty (the underdog toward $0). Distinct from the FORECAST,
-    which is the raw money-share (m_side/(m_side+m_other))."""
+    """MINT price per share on a side = its money-share (= the crowd-implied
+    probability, Polymarket-style), so a 50/50 book prices at $0.50 and rises
+    toward $1 as the side approaches certainty (the underdog toward $0) — range
+    $0.01–$0.99."""
     tot = m_side + m_other
-    return 2 * m_side / tot if tot > 0 else 1.0
+    return m_side / tot if tot > 0 else 0.5
 
 
 def mint_shares(m_side: float, m_other: float, dollars: float) -> float:
     """Shares minted for `dollars` on a side = integral dm/price(m) over the
-    mint, with price = 2*money-share. Halves the raw money-share integral so
-    50/50 mints at par."""
+    mint, with price = money-share (50/50 mints at $0.50/share)."""
     if m_side <= 0:
         raise ValueError("side must be seeded (M_i > 0) before dynamic minting")
-    return (dollars + m_other * math.log((m_side + dollars) / m_side)) / 2
+    return dollars + m_other * math.log((m_side + dollars) / m_side)
 
 
 def mint_shares_approx(m_side: float, m_other: float, dollars: float) -> float:
     """ln-free approximation for on-chain use: price the whole mint at its
-    MIDPOINT (price = 2*money-share), integer-only arithmetic (no logs/floats
-    in Soroban). shares = d / price_mid, price_mid = 2*(M_i+d/2)/(M_i+M_o+d/2).
+    MIDPOINT (price = money-share), integer-only arithmetic (no logs/floats in
+    Soroban). shares = d / price_mid, price_mid = (M_i+d/2)/(M_i+M_o+d/2).
     Exact for infinitesimal mints; conservative for large ones. All ops are
     +,-,*,/ so this ports to i128 stroops directly."""
     if m_side <= 0:
         raise ValueError("side must be seeded (M_i > 0) before dynamic minting")
-    return dollars * (2 * m_side + dollars + 2 * m_other) / (2 * (2 * m_side + dollars))
+    return dollars * (2 * m_side + dollars + 2 * m_other) / (2 * m_side + dollars)
 
 
 class Pos:
@@ -93,14 +92,15 @@ class Ledger:
         self.pos = []
 
     def seed(self, per_side: float):
-        """House seed both sides at par (1 share = $1) to establish the book."""
+        """House seed both sides at par ($0.50/share => 2 shares/$) to establish
+        the book (matches the empty-side bootstrap)."""
         for side in (0, 1):
             self.money[side] += per_side
-            self.pos.append(Pos(f"seed_{side}", side, per_side, per_side))
+            self.pos.append(Pos(f"seed_{side}", side, per_side, per_side * 2))
 
     def mint(self, who: str, side: int, dollars: float):
         if self.mode == "par":
-            shares = dollars
+            shares = dollars * 2  # flat $0.50/share baseline
         elif self.mode == "approx":
             shares = mint_shares_approx(self.money[side], self.money[1 - side], dollars)
         else:
@@ -347,8 +347,8 @@ def exp_approx_accuracy(trials=8000, seed=11):
 
 
 def price_curve():
-    """MINT price = 2 * money-share ($1 at 50/50, up to $2 at certainty)."""
-    return [(f, 2 * f, 2 * (1 - f)) for f in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)]
+    """MINT price = money-share ($0.50 at 50/50, up to $1 at certainty)."""
+    return [(f, f, 1 - f) for f in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)]
 
 
 # ---------------------------------------------------------------------------

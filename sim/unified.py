@@ -16,9 +16,10 @@ reconciliation. That is the fix: proper distribution/redistribution of the pot.
 Pricing (the money-share DPM generalized to any rung):
 
     C_i(m) = money on side i at rungs >= m           (C_i(0) = side i total)
-    price per (i, m) share = 2 * C_i(m) / TotalPool   (par $1 at a 50/50 book)
+    price per (i, m) share = C_i(m) / TotalPool       (money-share = crowd prob;
+                             $0.50 at 50/50, range $0.01–$0.99, Polymarket-style)
     shares for $d      = integral dm / price
-                       = ( d + (Total - C_i(m)) * ln((C_i(m)+d)/C_i(m)) ) / 2
+                       = d + (Total - C_i(m)) * ln((C_i(m)+d)/C_i(m))
 
 For m = 0 this is EXACTLY the current Neutral DPM (C_i(0)=T_i, Total-C_i(0)=
 T_other -> shares = (d + T_other*ln((T_i+d)/T_i))/2). So the unified model
@@ -53,14 +54,14 @@ import dpm  # D2 reference, for the reduction check
 
 def mint_shares(c0: float, total0: float, dollars: float) -> float:
     """Shares for `dollars` at a rung whose cumulative-at-least money is `c0`,
-    in a pool of `total0`, integrating dm/price with price = 2*C/Total.
-    Bootstraps an empty rung (c0 == 0) at par, matching the contract's
-    empty-side bootstrap."""
+    in a pool of `total0`, integrating dm/price with price = C/Total (the
+    money-share; $0.50 at 50/50, range $0.01–$0.99). Bootstraps an empty rung
+    (c0 == 0) at par ($0.50/share => 2 shares/$), matching the contract."""
     if dollars <= 0:
         return 0.0
     if c0 <= 0:
-        return dollars  # first money into an empty rung mints at par
-    return (dollars + (total0 - c0) * math.log((c0 + dollars) / c0)) / 2.0
+        return dollars * 2.0  # first money into an empty rung mints at par $0.50
+    return dollars + (total0 - c0) * math.log((c0 + dollars) / c0)
 
 
 class Pos:
@@ -89,18 +90,20 @@ class Book:
         return sum(d for r, d in self.money[side].items() if r >= m)
 
     def seed(self, per_side: float):
-        """House seed both sides' Neutral (rung 0) at par to establish the book."""
+        """House seed both sides' Neutral (rung 0) at par ($0.50/share => 2
+        shares/$) to establish the book."""
         for s in (0, 1):
             self.money[s][0] = self.money[s].get(0, 0.0) + per_side
-            self.pos.append(Pos(f"seed_{s}", s, 0, per_side, per_side))
+            self.pos.append(Pos(f"seed_{s}", s, 0, per_side, per_side * 2))
 
     def seed_rung(self, side: int, rung: int, amount: float):
-        """House-seed a dominance rung at par. MANDATORY under the unified model
-        (1.13a finding): a cold rung (C_i(m)=0) bootstraps at par, erasing the
-        depth discount, so deep convictions get dominated and early buyers are
-        penalised. Seeding gives every rung backing so C_i(m) is monotone in m."""
+        """House-seed a dominance rung at par ($0.50/share => 2 shares/$).
+        MANDATORY under the unified model (1.13a finding): a cold rung (C_i(m)=0)
+        bootstraps at par, erasing the depth discount, so deep convictions get
+        dominated and early buyers are penalised. Seeding gives every rung
+        backing so C_i(m) is monotone in m."""
         self.money[side][rung] = self.money[side].get(rung, 0.0) + amount
-        self.pos.append(Pos(f"seed_{side}_{rung}", side, rung, amount, amount))
+        self.pos.append(Pos(f"seed_{side}_{rung}", side, rung, amount, amount * 2))
 
     def buy(self, who: str, side: int, rung: int, dollars: float) -> float:
         """The one buy path: price against C_i(rung), mint shares, book money."""
@@ -406,7 +409,7 @@ def worked_example():
     for who, side, rung, d in WEX_BUYS:
         c0, tot0 = b.cum(side, rung), b.total()
         sh = b.buy(who, side, rung, d)
-        price = 2 * c0 / tot0 if c0 > 0 else 1.0
+        price = c0 / tot0 if c0 > 0 else 0.5
         trace.append((who, side, rung, d, c0, tot0, price, sh))
     pay, chk = settle_contract(b.pos, WEX_WINNER, WEX_MARGIN, WEX_RAKE)
     return b, trace, pay, chk
@@ -440,10 +443,11 @@ def main():
       "buy + a rung (win iff margin >= rung) + no exit (locked). The pot is then "
       "one share-denominated pool that distributes in a single pass — the fix "
       "for the cross-class reconciliation that 1.12b needed.\n")
-    p("Price per `(side i, rung m)` share = `2 * C_i(m) / Total`, where "
-      "`C_i(m)` = money on side i at rungs >= m. Shares for `$d` = "
-      "`( d + (Total - C_i(m)) * ln((C_i(m)+d)/C_i(m)) ) / 2`. At `m=0` this IS "
-      "the deployed Neutral DPM.\n")
+    p("Price per `(side i, rung m)` share = `C_i(m) / Total` (the money-share = "
+      "crowd probability; $0.50 at 50/50, range $0.01–$0.99), where `C_i(m)` = "
+      "money on side i at rungs >= m. Shares for `$d` = "
+      "`d + (Total - C_i(m)) * ln((C_i(m)+d)/C_i(m))`. At `m=0` this IS the "
+      "deployed Neutral DPM.\n")
 
     p("## 1. Solvency + conservation (the gate)\n")
     p(f"- {solv['trials']} random mixed pools (Neutral + conviction rungs), "
@@ -568,7 +572,8 @@ def main():
       "seed used today. With it, the ladder is correct and no rung is dominated.\n")
     p("**Feeds the design questions:** "
       "**U1** = price each rung against `C_i(m)` (cumulative-at-least money); "
-      "closed form `(d + (Total-C)*ln((C+d)/C))/2`, reduces to D2 at m=0. "
+      "closed form `d + (Total-C)*ln((C+d)/C)` (price = money-share, $0.50 at "
+      "50/50), reduces to D2 at m=0. "
       "**U2** = one uniform share split (no cross-class pass); dead deeper rungs "
       "bank; cancel refunds money-backing per (side,rung) share. "
       "**U3** = the model reduces to the worked example on Neutral-only pools; a "
