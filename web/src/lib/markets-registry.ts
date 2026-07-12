@@ -2,11 +2,15 @@
 // indexer/DB (Phase 1.6) becomes the real browse source; until then the
 // registry is built-in demo ids plus any id successfully opened locally.
 
+import { CONFIG } from "./config";
+
 // Demo catalog on the 1.13 unified-shares contract (CBQC2M3D…). Earlier ids
 // (1xxx–5xxx) lived on retired contracts (5xxx = the D2 contract retired
 // 2026-07-12 for the unified share model + money-share pricing).
 const BUILTIN: number[] = [6012, 6011, 6010];
-const KEY = "bakunawa:known-markets";
+// Scope remembered ids to the deployed contract — a redeploy starts fresh
+// instead of carrying dead ids (whose get_market fails on the new contract).
+const KEY = `bakunawa:known-markets:${CONFIG.contractId.slice(0, 10)}`;
 
 export function knownMarketIds(): number[] {
   if (typeof window === "undefined") return BUILTIN;
