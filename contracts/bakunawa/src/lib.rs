@@ -1,25 +1,33 @@
-//! Bakunawa — dominance parimutuel market contract (v4).
+//! Bakunawa — dominance parimutuel market contract (v4 + 1.13 unified shares).
 //!
-//! One shared pool per market, two instrument classes:
-//! - REGULAR predictions: par-minted per-side ticket tokens (classic assets
-//!   pre-minted into this contract's custody at listing) — freely tradable on
-//!   the DEX; trades move claims, never cash; settlement pays whoever HOLDS
-//!   tickets, via `redeem`. Settlement weight = stake (multiplier 1.0).
-//! - CONVICTIONS: winner + minimum margin, locked at entry, all-or-nothing;
-//!   wins iff correct side AND actual margin >= rung (exact hit wins).
-//!   Settlement weight = Stake * SideStake / S(rung)  (DemandMult, per S7).
+//! One shared pool per market. Every buy — regular OR conviction — is priced
+//! through the SAME dynamic path (DPM): USDC in, share out, priced against the
+//! side's cumulative-at-least money `C_i(m)` = money at rungs >= m. Two
+//! instrument classes differ only in the LOCK, not the mechanism:
+//! - REGULAR predictions (rung 0): per-side ticket tokens (classic assets
+//!   pre-minted into custody at listing) — freely tradable on the DEX; trades
+//!   move claims, never cash; settlement pays whoever HOLDS tickets, via
+//!   `redeem`. `C_i(0)` = the side's whole stake.
+//! - CONVICTIONS (rung >= 1): winner + minimum margin, LOCKED at entry (no
+//!   exit/transfer), all-or-nothing; wins iff correct side AND actual margin >=
+//!   rung (exact hit wins). Share-denominated too; claimed via `claim`. Deeper
+//!   rung -> smaller `C_i(m)` -> cheaper -> more shares/$ (the rarity reward is
+//!   in the buy price, not a settlement multiplier).
 //!
-//!   Payout_i = Stake_i + Weight_i / SumW * (LosingPool - Rake)
+//! Settlement is ONE uniform share split (no cross-class pass): every winning
+//! share (regular + convictions with rung <= margin) takes an equal slice of the
+//! raked losing pool; dead deeper rungs bank. Regular shares are fungible, so
+//! `redeem` pays the class-average money-backing per share; convictions are
+//! locked, so `claim` returns the own stake — both plus `shares/SumShares * dist`.
 //!
-//! S(m) = conviction stake on the side at threshold >= m; SideStake = regular
-//! + conviction stake — both from pool composition at lock, never the
-//! outcome. Rake (S1: 3%) comes off the losing pool at settlement. All
-//! payouts are pull-based; the contract holds no authority to move funds
-//! except through settlement logic. Integer dust stays in the contract.
+//!   redeem  = amount * RegMoney/RegShares  +  amount * dist/SumShares
+//!   claim_i = Stake_i                      +  Shares_i * dist/SumShares
+//!   dist    = LosingPool - Rake  (S1: 3% off the losing pool)
 //!
-//! Reference implementation: sim/engine.py — test.rs replicates the
-//! hand-settled worked example against this contract exactly (v4 restores
-//! the v2 settlement math, so the numbers are unchanged).
+//! Reduces identically to the D2 Neutral DPM on pure-regular pools. Solvent by
+//! construction: shares set only proportions, never the distributable total.
+//! All payouts pull-based; integer dust stays in the contract. Reference:
+//! sim/unified.py `worked_example()` — test.rs replicates it exactly.
 
 #![no_std]
 
@@ -164,8 +172,14 @@ impl Bakunawa {
         );
     }
 
-    /// CONVICTION (v4): winner + minimum margin, locked at entry — no exit,
-    /// no transfer, all-or-nothing. Weighted by DemandMult at settlement.
+    /// CONVICTION (v4 + 1.13): winner + minimum margin, locked at entry — no
+    /// exit, no transfer, all-or-nothing. SHARE-denominated like a regular buy
+    /// (the unified model): the stake is DPM-priced into shares against the
+    /// side's cumulative-at-least money `C_i(rung)` = conviction money at rungs
+    /// >= rung. Deeper rungs have smaller `C_i` -> cheaper -> more shares/$: the
+    /// rarity reward now lives in the buy price, not a settlement multiplier.
+    /// The only difference from a regular mint is the LOCK (no ticket token, no
+    /// exit). Rejected at/after `close_ts` (S3).
     pub fn place_conviction(
         env: Env,
         predictor: Address,
@@ -181,6 +195,13 @@ impl Bakunawa {
             panic_with_error!(&env, Error::InvalidRung);
         }
 
+        // DPM price against C_i(rung) (pre-buy): cumulative-at-least conviction
+        // money on the side, vs the rest of the pool. Reduces to the regular
+        // formula at rung 0 (C = side total); a cold rung bootstraps at par.
+        let c = s_of(&env, &market, side, rung);
+        let total = side_stake(&env, id, 0) + side_stake(&env, id, 1);
+        let shares = dpm::dpm_shares(c, total - c, amount);
+
         token::Client::new(&env, &stake_token(&env)).transfer(
             &predictor,
             &env.current_contract_address(),
@@ -190,6 +211,9 @@ impl Bakunawa {
         let agg_key = DataKey::Agg(id, side, rung);
         let agg: i128 = env.storage().persistent().get(&agg_key).unwrap_or(0);
         env.storage().persistent().set(&agg_key, &(agg + amount));
+        let ash_key = DataKey::AggShares(id, side, rung);
+        let ash: i128 = env.storage().persistent().get(&ash_key).unwrap_or(0);
+        env.storage().persistent().set(&ash_key, &(ash + shares));
         bump_side_stake(&env, id, side, amount);
 
         let pos_key = DataKey::Pos(id, predictor.clone());
@@ -202,13 +226,14 @@ impl Bakunawa {
             side,
             rung,
             stake: amount,
+            shares,
             claimed: false,
         });
         env.storage().persistent().set(&pos_key, &positions);
 
         env.events().publish(
             (Symbol::new(&env, "conviction"), id, predictor),
-            (side, rung, amount),
+            (side, rung, amount, shares),
         );
     }
 
@@ -248,15 +273,15 @@ impl Bakunawa {
                 if side != outcome.winner {
                     panic_with_error!(&env, Error::NothingToClaim);
                 }
-                if reg_shares <= 0 {
+                if outcome.reg_shares_winner <= 0 {
                     panic_with_error!(&env, Error::NothingToClaim);
                 }
                 let dist = outcome.losing_pool - outcome.rake_amount;
-                // regular class allocation (money + its weighted share of the
-                // losing pool; bounded by the pool), split by share count
-                let reg_alloc =
-                    reg_money * (outcome.sum_weights + dist) / outcome.sum_weights;
-                amount * reg_alloc / reg_shares
+                // Unified split (1.13): each regular share gets the class-average
+                // money-backing (fungible/tradable — holder may != buyer) plus a
+                // uniform slice of the raked losing pool by share count.
+                amount * outcome.reg_money_winner / outcome.reg_shares_winner
+                    + amount * dist / outcome.sum_shares
             }
         };
         // pull the tickets back into custody, pay from the pot
@@ -363,9 +388,9 @@ impl Bakunawa {
                 for p in positions.iter() {
                     let won = p.side == outcome.winner && p.rung <= outcome.margin;
                     if won && !p.claimed {
-                        let weight =
-                            p.stake * outcome.winner_stake / s_of(&env, &market, p.side, p.rung);
-                        payout += p.stake + weight * dist / outcome.sum_weights;
+                        // Unified split (1.13): own stake back + a uniform slice of
+                        // the raked losing pool by this conviction's DPM shares.
+                        payout += p.stake + p.shares * dist / outcome.sum_shares;
                         updated.push_back(Position { claimed: true, ..p });
                     } else {
                         updated.push_back(p);
@@ -412,12 +437,14 @@ impl Bakunawa {
                 side,
                 rung: 0,
                 stake: regular(&env, id, side),
+                shares: regular_shares(&env, id, side),
             });
             for r in market.rungs.iter() {
                 rows.push_back(LadderRow {
                     side,
                     rung: r,
                     stake: agg(&env, id, side, r),
+                    shares: agg_shares(&env, id, side, r),
                 });
             }
         }
@@ -477,6 +504,13 @@ fn regular_shares(env: &Env, id: u64, side: u32) -> i128 {
     env.storage()
         .persistent()
         .get(&DataKey::RegularShares(id, side))
+        .unwrap_or(0)
+}
+
+fn agg_shares(env: &Env, id: u64, side: u32, rung: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AggShares(id, side, rung))
         .unwrap_or(0)
 }
 
@@ -556,7 +590,6 @@ fn settle_inner(env: &Env, mut market: Market, winner: u32, margin: u32) {
         .get(&DataKey::SideStake(id, 1))
         .unwrap_or(0);
     let total = side_a + side_b;
-    let winner_stake = if winner == 0 { side_a } else { side_b };
 
     // Viability (S5): empty side or under-min pool at settlement => cancel.
     if side_a == 0 || side_b == 0 || total < market.min_pool {
@@ -564,34 +597,33 @@ fn settle_inner(env: &Env, mut market: Market, winner: u32, margin: u32) {
         return;
     }
 
-    // Winning weights: REGULAR stake at multiplier 1.0 plus every winning
-    // conviction rung. Conviction Weight(r) = Agg(r) * WinnerStake / S(r)
-    // (DemandMult, integer floor).
-    let mut sum_weights: i128 = 0;
-    let mut winning_stake_total: i128 = 0;
-    let reg = regular(env, id, winner);
-    if reg > 0 {
-        sum_weights += reg;
-        winning_stake_total += reg;
-    }
+    // Unified share split (1.13): winners = the winning side's REGULAR shares
+    // plus every winning conviction rung's shares (rung <= margin). Every
+    // winning share splits the raked losing pool uniformly — no DemandMult, no
+    // cross-class pass. `winning_money` (their stake) is what they get back;
+    // the rest of the pool (dead deeper rungs + losers) is the losing pool.
+    let reg_money = regular(env, id, winner);
+    let reg_shares = regular_shares(env, id, winner);
+    let mut sum_shares: i128 = reg_shares;
+    let mut winning_money: i128 = reg_money;
     for r in market.rungs.iter() {
         if r <= margin {
             let a = agg(env, id, winner, r);
             if a > 0 {
-                sum_weights += a * winner_stake / s_of(env, &market, winner, r);
-                winning_stake_total += a;
+                winning_money += a;
+                sum_shares += agg_shares(env, id, winner, r);
             }
         }
     }
 
-    // No winning positions at all (e.g. the winning side held only unmet
-    // dominance rungs): listing this as "settled" would be theater => cancel.
-    if sum_weights == 0 {
+    // No winning shares at all (e.g. the winning side held only unmet dominance
+    // rungs and no regular): listing this as "settled" would be theater => cancel.
+    if sum_shares == 0 {
         cancel_inner(env, market);
         return;
     }
 
-    let losing_pool = total - winning_stake_total;
+    let losing_pool = total - winning_money;
     let rake_amount = losing_pool * (market.rake_bps as i128) / 10_000;
     if rake_amount > 0 {
         let treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
@@ -607,8 +639,9 @@ fn settle_inner(env: &Env, mut market: Market, winner: u32, margin: u32) {
         margin,
         losing_pool,
         rake_amount,
-        sum_weights,
-        winner_stake,
+        sum_shares,
+        reg_money_winner: reg_money,
+        reg_shares_winner: reg_shares,
     };
     env.storage().persistent().set(&DataKey::Outcome(id), &outcome);
     market.status = MarketStatus::Settled;
