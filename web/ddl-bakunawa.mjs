@@ -100,6 +100,29 @@ await client.query(
   `CREATE INDEX IF NOT EXISTS "BakunawaPriceSample_asset_ts_idx" ON "BakunawaPriceSample"("asset", "ts")`,
 );
 
+// 5c/5d: Google profile + wallet binder
+await client.query(`
+CREATE TABLE IF NOT EXISTS "BakunawaUser" (
+  "id"          TEXT PRIMARY KEY,
+  "googleSub"   TEXT NOT NULL UNIQUE,
+  "email"       TEXT NOT NULL,
+  "name"        TEXT,
+  "image"       TEXT,
+  "displayName" TEXT,
+  "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`);
+await client.query(`
+CREATE TABLE IF NOT EXISTS "BakunawaProfileWallet" (
+  "userId"  TEXT NOT NULL REFERENCES "BakunawaUser"("id") ON DELETE CASCADE,
+  "address" TEXT NOT NULL,
+  "label"   TEXT,
+  "boundAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY ("userId", "address")
+)`);
+await client.query(
+  `CREATE INDEX IF NOT EXISTS "BakunawaProfileWallet_address_idx" ON "BakunawaProfileWallet"("address")`,
+);
+
 const check = await client.query(
   `SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'Bakunawa%' ORDER BY 1`,
 );

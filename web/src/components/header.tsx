@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { BrandWordmark } from "@/components/brand";
+import { useAccount } from "@/lib/use-account";
 import { useWallet } from "@/lib/wallet-context";
 
 function short(addr: string) {
@@ -10,6 +12,7 @@ function short(addr: string) {
 
 export function Header() {
   const { address, isConnecting: connecting, connect, disconnect } = useWallet();
+  const { configured, account } = useAccount();
   return (
     <header className="border-b border-neutral-800">
       <div className="mx-auto flex max-w-[1400px] items-center justify-between px-4 py-3">
@@ -29,23 +32,45 @@ export function Header() {
             </Link>
           </nav>
         </div>
-        {address ? (
-          <button
-            onClick={disconnect}
-            className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
-            title={address}
-          >
-            {short(address)} · disconnect
-          </button>
-        ) : (
-          <button
-            onClick={connect}
-            disabled={connecting}
-            className="rounded bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-50"
-          >
-            {connecting ? "Connecting…" : "Connect wallet"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {account ? (
+            <Link
+              href="/profile"
+              className="flex items-center gap-2 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
+              title={account.email}
+            >
+              {account.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={account.image} alt="" className="h-5 w-5 rounded-full" />
+              )}
+              {account.displayName ?? account.name ?? account.email}
+            </Link>
+          ) : configured ? (
+            <button
+              onClick={() => signIn("google")}
+              className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
+            >
+              Sign in
+            </button>
+          ) : null}
+          {address ? (
+            <button
+              onClick={disconnect}
+              className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
+              title={address}
+            >
+              {short(address)} · disconnect
+            </button>
+          ) : (
+            <button
+              onClick={connect}
+              disabled={connecting}
+              className="rounded bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-50"
+            >
+              {connecting ? "Connecting…" : "Connect wallet"}
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );
