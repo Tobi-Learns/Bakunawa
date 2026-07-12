@@ -46,6 +46,9 @@ export function neutralBasisFrom(
   profile: ProfileData | null,
   marketId: number,
   side: number,
+  // localStorage entries aren't wallet-keyed, so the fallback is only valid
+  // for the wallet connected in THIS browser — pass false for bound wallets.
+  allowLocalFallback = true,
 ): { avgPrice: number; shares: bigint } | null {
   const m = profile?.markets.find((x) => x.marketId === marketId.toString());
   const n = m?.neutral.find((x) => x.side === side);
@@ -55,5 +58,5 @@ export function neutralBasisFrom(
       shares: BigInt(n.shares),
     };
   }
-  return neutralBasis(marketId, side);
+  return allowLocalFallback ? neutralBasis(marketId, side) : null;
 }

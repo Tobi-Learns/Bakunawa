@@ -35,7 +35,14 @@ import { knownMarketIds } from "@/lib/markets-registry";
 import { getLiveMove, type LiveMove } from "@/lib/reflector";
 import { outcomeRung, settlePayout, type RungState } from "@/lib/parimutuel";
 import { fetchProfile, neutralBasisFrom, type ProfileData } from "@/lib/profile";
+import { useAccount } from "@/lib/use-account";
 import { useWallet } from "@/lib/wallet-context";
+
+interface WalletHoldings {
+  address: string;
+  positions: PositionView[]; // convictions
+  tickets: [bigint, bigint]; // Neutral shares held per side
+}
 
 interface Group {
   market: MarketView;
@@ -43,8 +50,7 @@ interface Group {
   ladder: LadderRowView[];
   outcome: OutcomeView | null;
   move: LiveMove | null;
-  positions: PositionView[]; // convictions
-  tickets: [bigint, bigint]; // Neutral shares held per side
+  wallets: WalletHoldings[]; // 5e: connected + bound wallets with holdings here
 }
 
 const num = (v: bigint) => Number(v);
@@ -122,28 +128,49 @@ function outcomeReturn(
 
 export default function PortfolioPage() {
   const { address, signTransaction } = useWallet();
+  const { account } = useAccount();
   const [groups, setGroups] = useState<Group[]>([]);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profiles, setProfiles] = useState<Map<string, ProfileData | null>>(new Map());
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string; hash?: string } | null>(null);
 
+  // 5e: signed-in users aggregate every bound wallet; signed-out behavior is
+  // unchanged (just the connected wallet). Actions still need the owning
+  // wallet connected — aggregation is read-only for the other wallets.
+  const addresses = (() => {
+    const set = new Set<string>();
+    if (address) set.add(address);
+    for (const w of account?.wallets ?? []) set.add(w.address);
+    return [...set];
+  })();
+  const addrKey = addresses.join(",");
+
   const refresh = useCallback(async () => {
-    if (!address) return;
-    // Server profile (5b): indexer-derived cost basis — cross-device, chain-truth.
-    // Fire alongside the chain reads; localStorage stays the optimistic fallback.
-    const profilePromise = fetchProfile(address);
+    if (addresses.length === 0) return;
+    // Server profiles (5b): indexer-derived cost basis — cross-device,
+    // chain-truth. localStorage stays the optimistic fallback (connected only).
+    const profilesPromise = Promise.all(
+      addresses.map(async (a) => [a, await fetchProfile(a)] as const),
+    );
     const found: Group[] = [];
     await Promise.all(
       knownMarketIds().map(async (id) => {
         try {
           const market = await getMarket(id);
-          const [positions, ta, tb] = await Promise.all([
-            getPositions(id, address),
-            getTicketBalance(market, 0, address).catch(() => 0n),
-            getTicketBalance(market, 1, address).catch(() => 0n),
-          ]);
-          if (positions.length === 0 && ta === 0n && tb === 0n) return;
+          const holdings: WalletHoldings[] = (
+            await Promise.all(
+              addresses.map(async (a) => {
+                const [positions, ta, tb] = await Promise.all([
+                  getPositions(id, a),
+                  getTicketBalance(market, 0, a).catch(() => 0n),
+                  getTicketBalance(market, 1, a).catch(() => 0n),
+                ]);
+                return { address: a, positions, tickets: [ta, tb] as [bigint, bigint] };
+              }),
+            )
+          ).filter((w) => w.positions.length > 0 || w.tickets[0] > 0n || w.tickets[1] > 0n);
+          if (holdings.length === 0) return;
           const status = uiStatus(market);
           const [ladder, outcome, move] = await Promise.all([
             getLadder(id),
@@ -152,16 +179,17 @@ export default function PortfolioPage() {
               ? getLiveMove(market.asset, market.baseline).catch(() => null)
               : null,
           ]);
-          found.push({ market, status, ladder, outcome, move, positions, tickets: [ta, tb] });
+          found.push({ market, status, ladder, outcome, move, wallets: holdings });
         } catch {
           /* market unreadable — skip */
         }
       }),
     );
-    setProfile(await profilePromise);
+    setProfiles(new Map(await profilesPromise));
     setGroups(found.sort((a, b) => Number(b.market.id - a.market.id)));
     setLoaded(true);
-  }, [address]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addrKey]);
 
   useEffect(() => {
     refresh();
@@ -185,7 +213,7 @@ export default function PortfolioPage() {
     }
   }
 
-  if (!address)
+  if (addresses.length === 0)
     return (
       <p className="py-16 text-center text-sm text-neutral-400">
         <Link href="/connect" className="underline">
@@ -194,6 +222,9 @@ export default function PortfolioPage() {
         to see your positions.
       </p>
     );
+
+  const multiWallet = addresses.length > 1;
+  const shortAddr = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
   const marginLabel = (m: MarketView, rung: number) =>
     rung === 0
@@ -232,17 +263,22 @@ export default function PortfolioPage() {
         groups.map((g) => {
           const id = Number(g.market.id);
           const sideName = (s: number) => (s === 0 ? g.market.sideA : g.market.sideB);
+          // Claim signs as the CONNECTED wallet — only its convictions count here.
+          const connectedHoldings = g.wallets.find((w) => w.address === address);
           const canClaim =
-            (g.status === "Settled" &&
+            !!connectedHoldings &&
+            ((g.status === "Settled" &&
               g.outcome &&
-              g.positions.some(
+              connectedHoldings.positions.some(
                 (p) => !p.claimed && p.side === g.outcome!.winner && p.rung <= g.outcome!.margin,
               )) ||
-            (g.status === "Cancelled" && g.positions.some((p) => !p.claimed));
+              (g.status === "Cancelled" && connectedHoldings.positions.some((p) => !p.claimed)));
 
-          // Build the display rows: a Neutral row per held side, then convictions.
+          // Build the display rows per wallet: a Neutral row per held side, then
+          // convictions. owner drives attribution + action gating (5e).
           type Row = {
             key: string;
+            owner: string;
             side: number;
             rung: number;
             shares: bigint;
@@ -252,37 +288,47 @@ export default function PortfolioPage() {
             redeem?: bigint; // Neutral shares to redeem (when redeemable)
           };
           const rows: Row[] = [];
-          for (const side of [0, 1]) {
-            const held = g.tickets[side];
-            if (held > 0n) {
-              // Fungible: no per-holder basis on chain — weighted average of the
-              // wallet's indexed mints (server, cross-device) with localStorage
-              // as the pre-index fallback. Pure DEX buys -> "—".
-              const basis = neutralBasisFrom(profile, id, side);
-              rows.push({
-                key: `n${side}`,
-                side,
-                rung: 0,
-                shares: held,
-                stake: 0,
-                boughtAt: basis ? `$${basis.avgPrice.toFixed(4)}` : "—",
-                cost: basis ? num(held) * basis.avgPrice : null,
-                redeem: held,
-              });
+          for (const w of g.wallets) {
+            for (const side of [0, 1]) {
+              const held = w.tickets[side];
+              if (held > 0n) {
+                // Fungible: no per-holder basis on chain — weighted average of the
+                // wallet's indexed mints (server, cross-device). localStorage
+                // fallback only for the connected wallet (entries aren't
+                // wallet-keyed). Pure DEX buys -> "—".
+                const basis = neutralBasisFrom(
+                  profiles.get(w.address) ?? null,
+                  id,
+                  side,
+                  w.address === address,
+                );
+                rows.push({
+                  key: `n${side}-${w.address}`,
+                  owner: w.address,
+                  side,
+                  rung: 0,
+                  shares: held,
+                  stake: 0,
+                  boughtAt: basis ? `$${basis.avgPrice.toFixed(4)}` : "—",
+                  cost: basis ? num(held) * basis.avgPrice : null,
+                  redeem: held,
+                });
+              }
             }
-          }
-          g.positions.forEach((p, i) => {
-            const price = num(p.shares) > 0 ? num(p.stake) / num(p.shares) : 0;
-            rows.push({
-              key: `c${i}`,
-              side: p.side,
-              rung: p.rung,
-              shares: p.shares,
-              stake: num(p.stake),
-              boughtAt: `$${price.toFixed(4)}`,
-              cost: num(p.stake), // convictions: stake is the cost basis (on-chain)
+            w.positions.forEach((p, i) => {
+              const price = num(p.shares) > 0 ? num(p.stake) / num(p.shares) : 0;
+              rows.push({
+                key: `c${i}-${w.address}`,
+                owner: w.address,
+                side: p.side,
+                rung: p.rung,
+                shares: p.shares,
+                stake: num(p.stake),
+                boughtAt: `$${price.toFixed(4)}`,
+                cost: num(p.stake), // convictions: stake is the cost basis (on-chain)
+              });
             });
-          });
+          }
 
           const returnCell = (row: Row) => {
             const pos = { side: row.side, rung: row.rung, shares: num(row.shares), stake: row.stake };
@@ -307,7 +353,7 @@ export default function PortfolioPage() {
                   </Link>
                   <StatusPill status={g.status} />
                 </div>
-                {canClaim && (
+                {canClaim && address && (
                   <button
                     onClick={() =>
                       run(`claim-${id}`, () => buildClaimXdr(address, BigInt(id)), `Claimed convictions on #${id}`)
@@ -335,8 +381,10 @@ export default function PortfolioPage() {
                   <tbody>
                     {rows.map((row) => {
                       const ret = returnCell(row);
+                      // Redeem signs as the holder — only the connected wallet's rows act.
                       const redeemable =
                         row.redeem != null &&
+                        row.owner === address &&
                         ((g.status === "Settled" && g.outcome?.winner === row.side) ||
                           g.status === "Cancelled");
                       return (
@@ -345,6 +393,18 @@ export default function PortfolioPage() {
                             <span className="text-neutral-300">{sideName(row.side)}</span>{" "}
                             <span className="text-neutral-500">·</span>{" "}
                             {marginLabel(g.market, row.rung)}
+                            {multiWallet && (
+                              <span
+                                className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] ${
+                                  row.owner === address
+                                    ? "border-emerald-700 text-emerald-400"
+                                    : "border-neutral-800 text-neutral-500"
+                                }`}
+                                title={row.owner}
+                              >
+                                {shortAddr(row.owner)}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 tabular-nums">{formatUsdc(row.shares)}</td>
                           <td className="px-4 py-2.5 tabular-nums text-neutral-400">{row.boughtAt}</td>
@@ -363,7 +423,7 @@ export default function PortfolioPage() {
                                 onClick={() =>
                                   run(
                                     `redeem-${id}-${row.side}`,
-                                    () => buildRedeemXdr(address, BigInt(id), row.side, row.redeem!),
+                                    () => buildRedeemXdr(row.owner, BigInt(id), row.side, row.redeem!),
                                     `Redeemed ${sideName(row.side)} shares on #${id}`,
                                   )
                                 }
@@ -391,8 +451,10 @@ export default function PortfolioPage() {
         same-side convictions bank into your share when they miss and take a cut
         when they land. Payout is a parimutuel pool split, not a fixed $1/share.
         Convictions carry an on-chain cost basis; Neutral shares are fungible, so
-        their bought-at is a weighted average of your in-app buys recorded
-        locally (DEX buys or another browser show a dash). Redemptions and claims are pull-based.
+        their bought-at is a weighted average of your in-app buys (indexed from
+        chain — any device; pure DEX buys show a dash). Signed-in profiles
+        aggregate every bound wallet; redeem and claim act only for the wallet
+        currently connected. Redemptions and claims are pull-based.
       </p>
     </div>
   );
