@@ -157,6 +157,60 @@ def cancel(positions):
     return pay, {"total": total, "paid": paid, "residual": total - paid}
 
 
+# --- Contract-faithful settlement: exactly what redeem()/claim() compute -----
+# Regular (rung 0) shares are FUNGIBLE/tradable, so the contract can't know a
+# holder's entry $ -> it splits the regular class's money-backing by SHARE count
+# (redeem). Convictions (rung>=1) are LOCKED (holder==buyer), so each is refunded
+# its own stake (claim). Every winning share, regular or conviction, additionally
+# earns dist/SW of the raked losing pool. This is the 1.13c acceptance semantics
+# (the simpler settle() above uses per-position $, fine only for the demos where
+# each buyer is distinct).
+
+
+def settle_contract(positions, winner: int, margin: int, rake_rate: float = 0.03):
+    total = sum(p.dollars for p in positions)
+    reg_w = [i for i, p in enumerate(positions) if p.side == winner and p.rung == 0]
+    conv_w = [i for i, p in enumerate(positions) if p.side == winner and 0 < p.rung <= margin]
+    reg_money_w = sum(positions[i].dollars for i in reg_w)
+    reg_shares_w = sum(positions[i].shares for i in reg_w)
+    conv_shares_w = sum(positions[i].shares for i in conv_w)
+    conv_dollars_w = sum(positions[i].dollars for i in conv_w)
+    sw = reg_shares_w + conv_shares_w
+    if sw <= 0:
+        return None, {"cancelled": True}
+    win_dollars = reg_money_w + conv_dollars_w
+    losing_pool = total - win_dollars
+    rake = rake_rate * losing_pool
+    dist = losing_pool - rake
+    pay = {i: 0.0 for i in range(len(positions))}
+    for i in reg_w:  # redeem(): class-avg money-backing + share slice
+        pay[i] = positions[i].shares * reg_money_w / reg_shares_w + positions[i].shares * dist / sw
+    for i in conv_w:  # claim(): own stake + share slice
+        pay[i] = positions[i].dollars + positions[i].shares * dist / sw
+    paid = sum(pay.values())
+    return pay, {"total": total, "paid": paid, "rake": rake,
+                 "residual": total - (paid + rake), "cancelled": False,
+                 "sum_shares": sw, "reg_money_w": reg_money_w,
+                 "reg_shares_w": reg_shares_w, "losing_pool": losing_pool}
+
+
+def cancel_contract(positions):
+    reg_money, reg_shares = {0: 0.0, 1: 0.0}, {0: 0.0, 1: 0.0}
+    for p in positions:
+        if p.rung == 0:
+            reg_money[p.side] += p.dollars
+            reg_shares[p.side] += p.shares
+    pay = {}
+    for i, p in enumerate(positions):
+        if p.rung == 0:  # regular: money-backing per share (fungible)
+            pay[i] = p.shares / reg_shares[p.side] * reg_money[p.side] if reg_shares[p.side] > 0 else 0.0
+        else:  # conviction: own stake (locked)
+            pay[i] = p.dollars
+    total = sum(p.dollars for p in positions)
+    paid = sum(pay.values())
+    return pay, {"total": total, "paid": paid, "residual": total - paid}
+
+
 # ---------------------------------------------------------------------------
 # Experiments (the gate)
 # ---------------------------------------------------------------------------
@@ -184,12 +238,12 @@ def exp_solvency(trials=6000, rake=0.03, seed=17):
     for _ in range(trials):
         b = _random_book(rng)
         if rng.random() < 0.15:
-            _, chk = cancel(b.pos)
+            _, chk = cancel_contract(b.pos)
             worst_cancel = max(worst_cancel, abs(chk["residual"]))
             continue
         winner = rng.randint(0, 1)
         margin = rng.choice([0] + RUNGS + [max(RUNGS) + 10])
-        pay, chk = settle(b.pos, winner, margin, rake)
+        pay, chk = settle_contract(b.pos, winner, margin, rake)
         if chk.get("cancelled"):
             cancelled += 1
             continue
@@ -354,7 +408,7 @@ def worked_example():
         sh = b.buy(who, side, rung, d)
         price = 2 * c0 / tot0 if c0 > 0 else 1.0
         trace.append((who, side, rung, d, c0, tot0, price, sh))
-    pay, chk = settle(b.pos, WEX_WINNER, WEX_MARGIN, WEX_RAKE)
+    pay, chk = settle_contract(b.pos, WEX_WINNER, WEX_MARGIN, WEX_RAKE)
     return b, trace, pay, chk
 
 
