@@ -17,7 +17,7 @@ import {
 import { getLadder, getMarket, type LadderRowView, type MarketView } from "@/lib/bakunawa";
 import { formatUsdc } from "@/lib/config";
 import { uiStatus } from "@/lib/market-status";
-import { demandMult, outcomeRung } from "@/lib/parimutuel";
+import { outcomeRung, sharePrice } from "@/lib/parimutuel";
 import { findPositionMeta } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
 
@@ -85,13 +85,18 @@ export default function PositionPage({
       : market.oracle === "Reflector"
         ? `≥ ${(position.rung / 100).toFixed(2)}%`
         : `≥ ${position.rung}`;
-  const multNow = demandMult(ladder, position.side, position.rung);
+  const priceNow = sharePrice(ladder, position.side, position.rung);
+  const pos = {
+    side: position.side,
+    rung: position.rung,
+    stake: Number(position.stake),
+    shares: Number(position.shares),
+  };
   const nowState = outcomeRung(
     ladder,
     outcome?.winner ?? position.side,
     outcome?.margin ?? position.rung,
-    position.side,
-    position.rung,
+    pos,
     market.rakeBps,
   );
 
@@ -135,7 +140,8 @@ export default function PositionPage({
             <span className="text-neutral-600">placed outside this browser</span>
           ),
         )}
-        {row("Rarity multiplier now", `×${multNow ? multNow.toFixed(2) : "—"}`)}
+        {row("Shares held", formatUsdc(position.shares))}
+        {row("Price per share now", `$${priceNow.toFixed(4)}`)}
         {status !== "Settled" &&
           status !== "Cancelled" &&
           row(

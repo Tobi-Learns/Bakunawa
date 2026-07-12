@@ -23,7 +23,7 @@ import {
 } from "@/lib/bakunawa";
 import { CONFIG, parseUsdc } from "@/lib/config";
 import { sharePrice, sharesForDollars } from "@/lib/dpm";
-import { demandMult, impliedRange } from "@/lib/parimutuel";
+import { quoteBuy } from "@/lib/parimutuel";
 import { recordPositionMeta } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
 import { HonestyTip } from "./honesty-tip";
@@ -58,13 +58,6 @@ export function PredictionSlip({
     bid: null,
     ask: null,
   });
-  // Per-side blended Neutral price (reg_money / reg_shares), reconstructed from
-  // the indexed mint history — the contract redeems Neutral shares per share,
-  // not per dollar, and no view exposes RegularShares. Estimate; refreshed on
-  // mount (avgPrice drifts slowly, so pairing it with the live ladder money is
-  // robust to indexer lag).
-  const [avgPrice, setAvgPrice] = useState<(number | null)[] | null>(null);
-
   const selling = tab === "sell";
   const mode: "prediction" | "conviction" =
     !selling && selected.rung >= 1 ? "conviction" : "prediction";
@@ -101,18 +94,6 @@ export function PredictionSlip({
     return () => clearInterval(t);
   }, [selling, loadBook]);
 
-  useEffect(() => {
-    let live = true;
-    fetch(`/api/markets/${market.id}/shares`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => live && setAvgPrice(d.avgPrice))
-      .catch(() => {
-        /* share-based quote falls back to par when unavailable */
-      });
-    return () => {
-      live = false;
-    };
-  }, [market.id]);
 
   // --- Buy: amount is USDC (what mint_tickets takes) ---
   const stake = useMemo(() => {
@@ -132,36 +113,22 @@ export function PredictionSlip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selling, mode, amt, ladder, selected.side]);
 
-  const range = useMemo(() => {
+  // Unified quote: DPM shares this $ buys + the self-priced implied-payout range.
+  const quote = useMemo(() => {
     if (selling || stake <= 0n) return null;
-    return impliedRange(ladder, selected.side, selected.rung, market.rungs, market.rakeBps, stake);
+    return quoteBuy(ladder, selected.side, selected.rung, Number(stake), market.rungs, market.rakeBps);
   }, [selling, ladder, selected, market.rungs, market.rakeBps, stake]);
-  const mult = demandMult(ladder, selected.side, selected.rung);
+  const range = quote?.range ?? null;
+  const pricePerShare = quote?.pricePerShare ?? sidePrice(selected.side);
   const rangePoint = range !== null && Math.abs(range.max - range.min) < 0.005;
-  // "To win" = gross payout if the side wins (principal + winnings), in USDC.
+  // "To win" = gross payout if the side wins, in USDC. The unified ROI already
+  // accounts for share pricing (quoteBuy mints the probe's shares), so this is
+  // just stake x (1 + ROI) for both Neutral and convictions.
   const toWin = useMemo(() => {
     if (!range || stake <= 0n) return null;
     const d = Number(stake) / 1e7;
-    const amp = { lo: 1 + range.min, hi: 1 + range.max };
-    // Convictions are par-staked in USDC — dollars in, dollars-weighted out.
-    if (selected.rung !== 0 || !neutralQuote) {
-      return { lo: d * amp.lo, hi: d * amp.hi };
-    }
-    // Neutral shares are DPM-priced and redeemed PER SHARE, not per dollar
-    // (contract redeem: payout = shares/reg_shares × reg_money × amp). Value the
-    // shares you actually receive against the side's blended price, so the
-    // favorite (pricier shares, fewer of them per $) wins less than the
-    // underdog for the same stake — the difference the old dollar quote hid.
-    const regMoney0 =
-      Number(ladder.find((r) => r.side === selected.side && r.rung === 0)?.stake ?? 0n) /
-      1e7;
-    const avgP = avgPrice?.[selected.side] ?? null;
-    // reg_shares from the live Neutral money and the (slow-moving) blended price
-    const regShares0 = avgP && avgP > 0 ? regMoney0 / avgP : regMoney0; // par fallback
-    const perShare = (regMoney0 + d) / (regShares0 + neutralQuote.shares);
-    const base = neutralQuote.shares * perShare; // your money-backing at settlement
-    return { lo: base * amp.lo, hi: base * amp.hi };
-  }, [range, stake, selected.rung, selected.side, neutralQuote, ladder, avgPrice]);
+    return { lo: d * (1 + range.min), hi: d * (1 + range.max) };
+  }, [range, stake]);
 
   const bidN = book.bid ? Number(book.bid) : null;
   const sellShares = selling ? amt : 0;
@@ -282,7 +249,7 @@ export function PredictionSlip({
     : neutralQuote
       ? `avg $${neutralQuote.avg.toFixed(3)} / share`
       : mode === "conviction"
-        ? `×${mult ? mult.toFixed(2) : "—"} multiplier`
+        ? `$${pricePerShare.toFixed(4)} / share`
         : " ";
 
   return (

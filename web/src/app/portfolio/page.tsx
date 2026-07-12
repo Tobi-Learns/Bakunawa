@@ -1,11 +1,14 @@
 "use client";
 
-// Portfolio (v4): two instrument classes per market —
-//  TICKETS      live balances of the wallet's side tickets (however acquired:
-//               minted or bought on the DEX), redeemable after settlement
-//               (winning side) or cancellation (par).
-//  CONVICTIONS  locked positions with the honest per-phase state; dead ones
-//               shown as "banked into pool", claims pull-based.
+// Portfolio (1.13 unified shares): one table per market. Every holding is
+// share-denominated —
+//   NEUTRAL      tradable side shares (however acquired: minted or bought on the
+//                DEX). Fungible, so no per-holder cost basis on-chain -> the
+//                return shows the redeemable PAYOUT (USDC), redeem after settle.
+//   CONVICTIONS  locked, share-denominated positions (stake + shares both on
+//                chain), so a real $/share and ROI. Dead ones bank; claim pulls.
+// Columns: Margin · Shares · Bought at · Min–Max (if it wins) · Deeper pool.
+// Payout = parimutuel pool split (NOT a fixed $1/share — see how-it-works).
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -29,7 +32,7 @@ import { formatUsdc } from "@/lib/config";
 import { uiStatus, type UiStatus } from "@/lib/market-status";
 import { knownMarketIds } from "@/lib/markets-registry";
 import { getLiveMove, type LiveMove } from "@/lib/reflector";
-import { outcomeRung, type RungState } from "@/lib/parimutuel";
+import { outcomeRung, settlePayout, type RungState } from "@/lib/parimutuel";
 import { useWallet } from "@/lib/wallet-context";
 
 interface Group {
@@ -39,106 +42,80 @@ interface Group {
   outcome: OutcomeView | null;
   move: LiveMove | null;
   positions: PositionView[]; // convictions
-  tickets: [bigint, bigint]; // held per side
+  tickets: [bigint, bigint]; // Neutral shares held per side
 }
+
+const num = (v: bigint) => Number(v);
+const usd = (stroops: number) => `$${(stroops / 1e7).toFixed(2)}`;
 
 function fmtRoi(roi: number) {
-  return `+${(roi * 100).toFixed(1)}%`;
+  return `${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(Math.abs(roi) >= 10 ? 0 : 1)}%`;
 }
 
-function fmtRange(r: { min: number; max: number }): string {
-  return Math.abs(r.max - r.min) < 0.005 ? fmtRoi(r.max) : `${fmtRoi(r.min)} – ${fmtRoi(r.max)}`;
-}
-
-/**
- * Open-market implied payout is a RANGE, not one number: a nested-threshold
- * pool pays differently depending on the final margin (same rule the ladder
- * and prediction slip obey). The position is already in the pool, so settle it
- * in place (no marginal probe) at the two boundary outcomes:
- *   max = side wins by exactly `rung` — deeper same-side convictions die + bank
- *   min = side wins by the largest listed rung — every same-side conviction lands
- * Collapses to a point for the top rung / a market with no convictions.
- */
-function openRange(g: Group, side: number, rung: number): { min: number; max: number } | null {
-  const maxRung = g.market.rungs.length ? Math.max(rung, ...g.market.rungs) : rung;
-  const best = outcomeRung(g.ladder, side, rung, side, rung, g.market.rakeBps);
-  const worst = outcomeRung(g.ladder, side, maxRung, side, rung, g.market.rakeBps);
-  if (best.state !== "won" || worst.state !== "won") return null;
-  return { min: Math.min(best.roi, worst.roi), max: Math.max(best.roi, worst.roi) };
-}
-
-function convictionState(g: Group, p: PositionView): { label: string; cls: string } {
-  const render = (rs: RungState, suffix: string) =>
-    rs.state === "won"
-      ? { label: `${fmtRoi(rs.roi)} ${suffix}`, cls: "text-emerald-400" }
-      : rs.state === "banked"
-        ? { label: "banked into pool", cls: "text-amber-400" }
-        : { label: suffix === "if settled now" ? "losing now" : "lost", cls: "text-neutral-500" };
-
-  if (g.status === "Cancelled")
-    return p.claimed
-      ? { label: "refunded", cls: "text-neutral-500" }
-      : { label: "refund available", cls: "text-amber-300" };
-  if (g.status === "Settled" && g.outcome) {
-    const rs = outcomeRung(
-      g.ladder, g.outcome.winner, g.outcome.margin, p.side, p.rung, g.market.rakeBps,
-    );
-    if (rs.state === "won" && p.claimed)
-      return { label: `${fmtRoi(rs.roi)} · claimed`, cls: "text-neutral-400" };
-    return render(rs, "won");
-  }
-  if ((g.status === "Locked" || g.status === "Settling") && g.move?.winningSide != null) {
-    return render(
-      outcomeRung(g.ladder, g.move.winningSide, g.move.units, p.side, p.rung, g.market.rakeBps),
-      "if settled now",
-    );
-  }
-  // Open, no live outcome yet: the payout is a RANGE, not the lone optimistic figure.
-  const range = openRange(g, p.side, p.rung);
-  return range
-    ? { label: `${fmtRange(range)} if it wins`, cls: "text-emerald-400" }
-    : { label: "—", cls: "text-neutral-500" };
-}
-
-function ticketState(g: Group, side: number): { label: string; cls: string; redeemable: boolean } {
-  if (g.status === "Cancelled")
-    return { label: "redeem at par", cls: "text-amber-300", redeemable: true };
-  if (g.status === "Settled" && g.outcome) {
-    if (side !== g.outcome.winner)
-      return { label: "lost", cls: "text-neutral-500", redeemable: false };
-    const rs = outcomeRung(g.ladder, g.outcome.winner, g.outcome.margin, side, 0, g.market.rakeBps);
-    return {
-      label: rs.state === "won" ? `${fmtRoi(rs.roi)} — redeemable` : "—",
-      cls: "text-emerald-400",
-      redeemable: true,
-    };
-  }
-  // "sharks circling": open conviction money on the ticket's own side — the
-  // variance regulars are structurally short (they underperform if it lands).
-  const sharks = g.ladder
-    .filter((r) => r.side === side && r.rung > 0)
+/** Same-side money staked at rungs strictly deeper than `rung` — the dominance
+ *  pool sitting above this position (banks into it if those rungs miss). */
+function deeperPool(g: Group, side: number, rung: number): bigint {
+  return g.ladder
+    .filter((r) => r.side === side && r.rung > rung)
     .reduce((a, r) => a + r.stake, 0n);
-  const sharkNote = sharks > 0n ? ` · 🦈 ${formatUsdc(sharks)} in convictions circling` : "";
-  // Locked/Settling with a live oracle move: a concrete outcome → single number.
-  if (g.move?.winningSide != null && (g.status === "Locked" || g.status === "Settling")) {
-    const outcomeNow = outcomeRung(g.ladder, g.move.winningSide, g.move.units, side, 0, g.market.rakeBps);
+}
+
+/** Payout (USDC stroops) at the two boundary outcomes for a winning position. */
+function winPayoutRange(
+  g: Group,
+  pos: { side: number; rung: number; shares: number; stake: number },
+): { lo: number; hi: number } | null {
+  const maxRung = g.market.rungs.length
+    ? Math.max(pos.rung, ...g.market.rungs)
+    : pos.rung;
+  const best = settlePayout(g.ladder, pos, pos.side, pos.rung, g.market.rakeBps);
+  const worst = settlePayout(g.ladder, pos, pos.side, maxRung, g.market.rakeBps);
+  if (best === null || worst === null) return null;
+  return { lo: Math.min(best, worst), hi: Math.max(best, worst) };
+}
+
+/** Return cell for an OPEN position: ROI range when a cost basis exists
+ *  (convictions: stake), else the redeemable payout range in USDC. */
+function openReturn(
+  g: Group,
+  pos: { side: number; rung: number; shares: number; stake: number },
+  basis: number | null,
+): { text: string; cls: string } {
+  const r = winPayoutRange(g, pos);
+  if (!r) return { text: "—", cls: "text-neutral-600" };
+  if (basis && basis > 0) {
+    const lo = r.lo / basis - 1;
+    const hi = r.hi / basis - 1;
+    const same = Math.abs(hi - lo) < 0.005;
     return {
-      label:
-        (outcomeNow.state === "won"
-          ? `${fmtRoi(outcomeNow.roi)} if settled now · tradable`
-          : "losing now · tradable") + sharkNote,
-      cls: outcomeNow.state === "won" ? "text-neutral-200" : "text-neutral-500",
-      redeemable: false,
+      text: `${same ? fmtRoi(hi) : `${fmtRoi(lo)} – ${fmtRoi(hi)}`} if it wins`,
+      cls: "text-emerald-400",
     };
   }
-  // Open: implied payout is a RANGE. Rung-0 shares see the widest spread —
-  // they're structurally short every same-side conviction.
-  const range = openRange(g, side, 0);
+  const same = Math.abs(r.hi - r.lo) < 1e5;
   return {
-    label: (range ? `${fmtRange(range)} if it wins · tradable` : "tradable") + sharkNote,
-    cls: range ? "text-neutral-200" : "text-neutral-500",
-    redeemable: false,
+    text: `${same ? usd(r.hi) : `${usd(r.lo)} – ${usd(r.hi)}`} if it wins`,
+    cls: "text-neutral-200",
   };
+}
+
+/** Return cell at a KNOWN outcome (Locked live-move / Settled). */
+function outcomeReturn(
+  g: Group,
+  pos: { side: number; rung: number; shares: number; stake: number },
+  winner: number,
+  margin: number,
+  suffix: string,
+): { text: string; cls: string } {
+  const rs: RungState = outcomeRung(g.ladder, winner, margin, pos, g.market.rakeBps);
+  if (rs.state === "won") {
+    // ROI needs a basis; convictions have one (stake), Neutral shows payout.
+    if (pos.stake > 0) return { text: `${fmtRoi(rs.roi)} ${suffix}`, cls: "text-emerald-400" };
+    const pay = settlePayout(g.ladder, pos, winner, margin, g.market.rakeBps);
+    return { text: `${usd(pay ?? 0)} ${suffix}`, cls: "text-emerald-400" };
+  }
+  if (rs.state === "banked") return { text: "banked into pool", cls: "text-amber-400" };
+  return { text: suffix.includes("now") ? "losing now" : "lost", cls: "text-neutral-500" };
 }
 
 export default function PortfolioPage() {
@@ -211,6 +188,13 @@ export default function PortfolioPage() {
       </p>
     );
 
+  const marginLabel = (m: MarketView, rung: number) =>
+    rung === 0
+      ? "Neutral"
+      : m.oracle === "Reflector"
+        ? `≥ ${(rung / 100).toFixed(2)}%`
+        : `≥ ${rung}`;
+
   return (
     <div className="flex flex-col gap-5">
       <h1 className="text-2xl font-semibold">Portfolio</h1>
@@ -245,10 +229,62 @@ export default function PortfolioPage() {
             (g.status === "Settled" &&
               g.outcome &&
               g.positions.some(
-                (p) =>
-                  !p.claimed && p.side === g.outcome!.winner && p.rung <= g.outcome!.margin,
+                (p) => !p.claimed && p.side === g.outcome!.winner && p.rung <= g.outcome!.margin,
               )) ||
             (g.status === "Cancelled" && g.positions.some((p) => !p.claimed));
+
+          // Build the display rows: a Neutral row per held side, then convictions.
+          type Row = {
+            key: string;
+            side: number;
+            rung: number;
+            shares: bigint;
+            stake: number | null; // convictions only
+            boughtAt: string; // $/share
+            redeem?: bigint; // Neutral shares to redeem (when redeemable)
+          };
+          const rows: Row[] = [];
+          for (const side of [0, 1]) {
+            const held = g.tickets[side];
+            if (held > 0n)
+              rows.push({
+                key: `n${side}`,
+                side,
+                rung: 0,
+                shares: held,
+                stake: null,
+                boughtAt: "—", // fungible: entry price not tracked on-chain
+                redeem: held,
+              });
+          }
+          g.positions.forEach((p, i) => {
+            const price = num(p.shares) > 0 ? num(p.stake) / num(p.shares) : 0;
+            rows.push({
+              key: `c${i}`,
+              side: p.side,
+              rung: p.rung,
+              shares: p.shares,
+              stake: num(p.stake),
+              boughtAt: `$${price.toFixed(4)}`,
+            });
+          });
+
+          const returnCell = (row: Row) => {
+            const pos = {
+              side: row.side,
+              rung: row.rung,
+              shares: num(row.shares),
+              stake: row.stake ?? 0,
+            };
+            if (g.status === "Cancelled")
+              return { text: "refund available", cls: "text-amber-300" };
+            if (g.status === "Settled" && g.outcome)
+              return outcomeReturn(g, pos, g.outcome.winner, g.outcome.margin, "settled");
+            if ((g.status === "Locked" || g.status === "Settling") && g.move?.winningSide != null)
+              return outcomeReturn(g, pos, g.move.winningSide, g.move.units, "if settled now");
+            return openReturn(g, pos, row.stake);
+          };
+
           return (
             <div key={String(g.market.id)} className="rounded-lg border border-neutral-800">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-4 py-2.5">
@@ -273,69 +309,75 @@ export default function PortfolioPage() {
                   </button>
                 )}
               </div>
-              <table className="w-full text-sm">
-                <tbody>
-                  {[0, 1].map((side) => {
-                    const held = g.tickets[side];
-                    if (held === 0n) return null;
-                    const st = ticketState(g, side);
-                    return (
-                      <tr key={`t${side}`} className="border-t border-neutral-900 first:border-t-0">
-                        <td className="px-4 py-2.5">{sideName(side)} shares</td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatUsdc(held)} held</td>
-                        <td className={`px-4 py-2.5 ${st.cls}`}>{st.label}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          {st.redeemable && (
-                            <button
-                              onClick={() =>
-                                run(
-                                  `redeem-${id}-${side}`,
-                                  () => buildRedeemXdr(address, BigInt(id), side, held),
-                                  `Redeemed ${sideName(side)} shares on #${id}`,
-                                )
-                              }
-                              disabled={busy !== null}
-                              className="rounded bg-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-950 disabled:opacity-50"
-                            >
-                              {busy === `redeem-${id}-${side}` ? "Redeeming…" : "Redeem"}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {g.positions.map((p, i) => {
-                    const st = convictionState(g, p);
-                    return (
-                      <tr key={i} className="border-t border-neutral-900">
-                        <td className="px-4 py-2.5">
-                          <Link href={`/portfolio/${g.market.id}-${i}`} className="hover:underline">
-                            Conviction: {sideName(p.side)}{" "}
-                            {g.market.oracle === "Reflector"
-                              ? `by ≥ ${(p.rung / 100).toFixed(2)}%`
-                              : `by ≥ ${p.rung}`}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2.5 tabular-nums">{formatUsdc(p.stake)} USDC</td>
-                        <td className={`px-4 py-2.5 ${st.cls}`} colSpan={2}>
-                          {st.label}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-neutral-500">
+                    <tr>
+                      <th className="px-4 py-2 font-normal">{sideName(0)} / {sideName(1)} · margin</th>
+                      <th className="px-4 py-2 font-normal">Shares</th>
+                      <th className="px-4 py-2 font-normal">Bought at</th>
+                      <th className="px-4 py-2 font-normal">Return</th>
+                      <th className="px-4 py-2 font-normal">Deeper pool</th>
+                      <th className="px-4 py-2 font-normal text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const ret = returnCell(row);
+                      const redeemable =
+                        row.redeem != null &&
+                        ((g.status === "Settled" && g.outcome?.winner === row.side) ||
+                          g.status === "Cancelled");
+                      return (
+                        <tr key={row.key} className="border-t border-neutral-900">
+                          <td className="px-4 py-2.5">
+                            <span className="text-neutral-300">{sideName(row.side)}</span>{" "}
+                            <span className="text-neutral-500">·</span>{" "}
+                            {marginLabel(g.market, row.rung)}
+                          </td>
+                          <td className="px-4 py-2.5 tabular-nums">{formatUsdc(row.shares)}</td>
+                          <td className="px-4 py-2.5 tabular-nums text-neutral-400">{row.boughtAt}</td>
+                          <td className={`px-4 py-2.5 ${ret.cls}`}>{ret.text}</td>
+                          <td className="px-4 py-2.5 tabular-nums text-neutral-400">
+                            {deeperPool(g, row.side, row.rung) > 0n
+                              ? `$${formatUsdc(deeperPool(g, row.side, row.rung))}`
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {redeemable && row.redeem != null && (
+                              <button
+                                onClick={() =>
+                                  run(
+                                    `redeem-${id}-${row.side}`,
+                                    () => buildRedeemXdr(address, BigInt(id), row.side, row.redeem!),
+                                    `Redeemed ${sideName(row.side)} shares on #${id}`,
+                                  )
+                                }
+                                disabled={busy !== null}
+                                className="rounded bg-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-950 disabled:opacity-50"
+                              >
+                                {busy === `redeem-${id}-${row.side}` ? "Redeeming…" : "Redeem"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         })
       )}
       <p className="text-xs text-neutral-600">
-        States refresh from chain every 15s. Open positions show a min–max range
-        because the payout depends on the final margin — deeper same-side
-        convictions bank into your share when they miss and take a cut when they
-        land. Share rows show your live balance — including shares bought on the
-        DEX. Redemptions and conviction claims are pull-based; funds stay in the
-        market contract until you collect.
+        States refresh from chain every 15s. Every holding is share-denominated;
+        price/share is the crowd probability ($0.01–$0.99). Open positions show a
+        min–max range because the payout depends on the final margin — deeper
+        same-side convictions bank into your share when they miss and take a cut
+        when they land. Payout is a parimutuel pool split, not a fixed $1/share.
+        Neutral shares are fungible (entry price isn’t tracked on-chain), so their
+        return shows the redeemable USDC. Redemptions and claims are pull-based.
       </p>
     </div>
   );
