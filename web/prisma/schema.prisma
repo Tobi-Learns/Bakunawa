@@ -88,6 +88,36 @@ model Exit {
   @@map("BakunawaExit")
 }
 
+/// 5c: Google-bound profile (Auth.js, JWT sessions — no DB session tables).
+/// The binder: groups wallet addresses under one account (5d) and carries the
+/// profile identity. Deliberate privacy linkage (Phase 5 decision 6).
+model User {
+  id          String   @id @default(uuid())
+  googleSub   String   @unique
+  email       String
+  name        String? // from Google at first sign-in
+  image       String? // Google avatar URL
+  displayName String? // user-editable, shown in-app
+  createdAt   DateTime @default(now())
+  wallets     ProfileWallet[]
+
+  @@map("BakunawaUser")
+}
+
+/// 5d: bound wallet addresses per user (bind-on-connect, no signature —
+/// Phase 5 decision 4).
+model ProfileWallet {
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address String
+  label   String?
+  boundAt DateTime @default(now())
+
+  @@id([userId, address])
+  @@index([address])
+  @@map("BakunawaProfileWallet")
+}
+
 model IndexerCursor {
   id         Int      @id @default(1)
   lastLedger Int
