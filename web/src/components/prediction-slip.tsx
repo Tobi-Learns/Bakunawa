@@ -24,7 +24,7 @@ import {
 import { CONFIG, parseUsdc } from "@/lib/config";
 import { sharePrice, sharesForDollars } from "@/lib/dpm";
 import { quoteBuy } from "@/lib/parimutuel";
-import { recordPositionMeta } from "@/lib/positions-meta";
+import { recordNeutralEntry, recordPositionMeta } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
 import { HonestyTip } from "./honesty-tip";
 
@@ -191,6 +191,16 @@ export function PredictionSlip({
           stake: stake.toString(),
           entryRoi,
           txHash,
+          at: Date.now(),
+        });
+      } else if (neutralQuote) {
+        // Fungible Neutral shares: record this mint's cost basis for the
+        // portfolio's weighted-average "Bought at" (contract can't track it).
+        recordNeutralEntry({
+          marketId: Number(market.id),
+          side: selected.side,
+          dollars: stake.toString(),
+          shares: BigInt(Math.round(neutralQuote.shares * 1e7)).toString(),
           at: Date.now(),
         });
       }

@@ -3,12 +3,13 @@
 // Portfolio (1.13 unified shares): one table per market. Every holding is
 // share-denominated —
 //   NEUTRAL      tradable side shares (however acquired: minted or bought on the
-//                DEX). Fungible, so no per-holder cost basis on-chain -> the
-//                return shows the redeemable PAYOUT (USDC), redeem after settle.
+//                DEX). Fungible -> no on-chain cost basis; "bought at" is the
+//                weighted average of the wallet's in-app mints (positions-meta),
+//                or "—" for DEX/other-browser buys. Redeem after settle.
 //   CONVICTIONS  locked, share-denominated positions (stake + shares both on
-//                chain), so a real $/share and ROI. Dead ones bank; claim pulls.
-// Columns: Margin · Shares · Bought at · Min–Max (if it wins) · Deeper pool.
-// Payout = parimutuel pool split (NOT a fixed $1/share — see how-it-works).
+//                chain), so a real $/share, cost, and ROI. Dead ones bank.
+// Columns: Margin · Shares · Bought at · Cost · Return (min–max if it wins) ·
+// Deeper pool. Payout = parimutuel pool split (NOT a fixed $1/share).
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -33,6 +34,7 @@ import { uiStatus, type UiStatus } from "@/lib/market-status";
 import { knownMarketIds } from "@/lib/markets-registry";
 import { getLiveMove, type LiveMove } from "@/lib/reflector";
 import { outcomeRung, settlePayout, type RungState } from "@/lib/parimutuel";
+import { neutralBasis } from "@/lib/positions-meta";
 import { useWallet } from "@/lib/wallet-context";
 
 interface Group {
@@ -239,23 +241,29 @@ export default function PortfolioPage() {
             side: number;
             rung: number;
             shares: bigint;
-            stake: number | null; // convictions only
+            stake: number; // pos stake for settlement (convictions); 0 for Neutral
             boughtAt: string; // $/share
+            cost: number | null; // total USDC cost basis (stroops); null if unknown
             redeem?: bigint; // Neutral shares to redeem (when redeemable)
           };
           const rows: Row[] = [];
           for (const side of [0, 1]) {
             const held = g.tickets[side];
-            if (held > 0n)
+            if (held > 0n) {
+              // Fungible: no on-chain basis — use the wallet's recorded in-app
+              // mints (weighted average). DEX buys / other browsers -> "—".
+              const basis = neutralBasis(id, side);
               rows.push({
                 key: `n${side}`,
                 side,
                 rung: 0,
                 shares: held,
-                stake: null,
-                boughtAt: "—", // fungible: entry price not tracked on-chain
+                stake: 0,
+                boughtAt: basis ? `$${basis.avgPrice.toFixed(4)}` : "—",
+                cost: basis ? num(held) * basis.avgPrice : null,
                 redeem: held,
               });
+            }
           }
           g.positions.forEach((p, i) => {
             const price = num(p.shares) > 0 ? num(p.stake) / num(p.shares) : 0;
@@ -266,23 +274,19 @@ export default function PortfolioPage() {
               shares: p.shares,
               stake: num(p.stake),
               boughtAt: `$${price.toFixed(4)}`,
+              cost: num(p.stake), // convictions: stake is the cost basis (on-chain)
             });
           });
 
           const returnCell = (row: Row) => {
-            const pos = {
-              side: row.side,
-              rung: row.rung,
-              shares: num(row.shares),
-              stake: row.stake ?? 0,
-            };
+            const pos = { side: row.side, rung: row.rung, shares: num(row.shares), stake: row.stake };
             if (g.status === "Cancelled")
               return { text: "refund available", cls: "text-amber-300" };
             if (g.status === "Settled" && g.outcome)
               return outcomeReturn(g, pos, g.outcome.winner, g.outcome.margin, "settled");
             if ((g.status === "Locked" || g.status === "Settling") && g.move?.winningSide != null)
               return outcomeReturn(g, pos, g.move.winningSide, g.move.units, "if settled now");
-            return openReturn(g, pos, row.stake);
+            return openReturn(g, pos, row.cost);
           };
 
           return (
@@ -316,6 +320,7 @@ export default function PortfolioPage() {
                       <th className="px-4 py-2 font-normal">{sideName(0)} / {sideName(1)} · margin</th>
                       <th className="px-4 py-2 font-normal">Shares</th>
                       <th className="px-4 py-2 font-normal">Bought at</th>
+                      <th className="px-4 py-2 font-normal">Cost</th>
                       <th className="px-4 py-2 font-normal">Return</th>
                       <th className="px-4 py-2 font-normal">Deeper pool</th>
                       <th className="px-4 py-2 font-normal text-right"></th>
@@ -337,6 +342,9 @@ export default function PortfolioPage() {
                           </td>
                           <td className="px-4 py-2.5 tabular-nums">{formatUsdc(row.shares)}</td>
                           <td className="px-4 py-2.5 tabular-nums text-neutral-400">{row.boughtAt}</td>
+                          <td className="px-4 py-2.5 tabular-nums text-neutral-400">
+                            {row.cost != null ? `$${(row.cost / 1e7).toFixed(2)}` : "—"}
+                          </td>
                           <td className={`px-4 py-2.5 ${ret.cls}`}>{ret.text}</td>
                           <td className="px-4 py-2.5 tabular-nums text-neutral-400">
                             {deeperPool(g, row.side, row.rung) > 0n
@@ -376,8 +384,9 @@ export default function PortfolioPage() {
         min–max range because the payout depends on the final margin — deeper
         same-side convictions bank into your share when they miss and take a cut
         when they land. Payout is a parimutuel pool split, not a fixed $1/share.
-        Neutral shares are fungible (entry price isn’t tracked on-chain), so their
-        return shows the redeemable USDC. Redemptions and claims are pull-based.
+        Convictions carry an on-chain cost basis; Neutral shares are fungible, so
+        their bought-at is a weighted average of your in-app buys recorded
+        locally (DEX buys or another browser show a dash). Redemptions and claims are pull-based.
       </p>
     </div>
   );
