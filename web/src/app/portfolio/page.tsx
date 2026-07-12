@@ -34,7 +34,7 @@ import { uiStatus, type UiStatus } from "@/lib/market-status";
 import { knownMarketIds } from "@/lib/markets-registry";
 import { getLiveMove, type LiveMove } from "@/lib/reflector";
 import { outcomeRung, settlePayout, type RungState } from "@/lib/parimutuel";
-import { neutralBasis } from "@/lib/positions-meta";
+import { fetchProfile, neutralBasisFrom, type ProfileData } from "@/lib/profile";
 import { useWallet } from "@/lib/wallet-context";
 
 interface Group {
@@ -123,12 +123,16 @@ function outcomeReturn(
 export default function PortfolioPage() {
   const { address, signTransaction } = useWallet();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string; hash?: string } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!address) return;
+    // Server profile (5b): indexer-derived cost basis — cross-device, chain-truth.
+    // Fire alongside the chain reads; localStorage stays the optimistic fallback.
+    const profilePromise = fetchProfile(address);
     const found: Group[] = [];
     await Promise.all(
       knownMarketIds().map(async (id) => {
@@ -154,6 +158,7 @@ export default function PortfolioPage() {
         }
       }),
     );
+    setProfile(await profilePromise);
     setGroups(found.sort((a, b) => Number(b.market.id - a.market.id)));
     setLoaded(true);
   }, [address]);
@@ -250,9 +255,10 @@ export default function PortfolioPage() {
           for (const side of [0, 1]) {
             const held = g.tickets[side];
             if (held > 0n) {
-              // Fungible: no on-chain basis — use the wallet's recorded in-app
-              // mints (weighted average). DEX buys / other browsers -> "—".
-              const basis = neutralBasis(id, side);
+              // Fungible: no per-holder basis on chain — weighted average of the
+              // wallet's indexed mints (server, cross-device) with localStorage
+              // as the pre-index fallback. Pure DEX buys -> "—".
+              const basis = neutralBasisFrom(profile, id, side);
               rows.push({
                 key: `n${side}`,
                 side,
