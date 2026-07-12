@@ -76,7 +76,7 @@ export default function Home() {
         {[
           {
             h: "Predict or convict",
-            b: "Back a winner with tradable shares, or lock a conviction on the margin. The rarer the call, the bigger the multiplier.",
+            b: "Back a winner with tradable shares, or lock a conviction on the margin. The rarer the call, the cheaper the shares — so your dollar buys more of them.",
           },
           {
             h: "Watch the pool swallow",
@@ -95,8 +95,8 @@ export default function Home() {
       </section>
 
       <p className="text-center text-xs text-neutral-600">
-        A multiplier is a relative weight in the pool, never fixed odds — every market
-        shows live implied payouts.{" "}
+        A share&apos;s price is a probability, but its payout is a parimutuel pool split —
+        not a fixed $1. Every market shows live implied payouts.{" "}
         <Link href="/how-it-works#multiplier-vs-odds" className="underline">
           Why that matters
         </Link>
