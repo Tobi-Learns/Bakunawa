@@ -523,7 +523,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 1000000000
+                    "lo": 2000000000
                   }
                 }
               ]
@@ -545,7 +545,7 @@
                     {
                       "i128": {
                         "hi": 0,
-                        "lo": 1000000000
+                        "lo": 2000000000
                       }
                     }
                   ]
@@ -1040,6 +1040,66 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "AggShares"
+                },
+                {
+                  "u64": 11
+                },
+                {
+                  "u32": 0
+                },
+                {
+                  "u32": 500
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "AggShares"
+                    },
+                    {
+                      "u64": 11
+                    },
+                    {
+                      "u32": 0
+                    },
+                    {
+                      "u32": 500
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 1000000000
+                  }
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+            "key": {
+              "vec": [
+                {
                   "symbol": "Market"
                 },
                 {
@@ -1292,12 +1352,34 @@
                     },
                     {
                       "key": {
-                        "symbol": "sum_weights"
+                        "symbol": "reg_money_winner"
                       },
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 2500000000
+                          "lo": 1000000000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "reg_shares_winner"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 2000000000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "sum_shares"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 3000000000
                         }
                       }
                     },
@@ -1307,17 +1389,6 @@
                       },
                       "val": {
                         "u32": 0
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "winner_stake"
-                      },
-                      "val": {
-                        "i128": {
-                          "hi": 0,
-                          "lo": 1500000000
-                        }
                       }
                     }
                   ]
@@ -1388,6 +1459,17 @@
                           },
                           "val": {
                             "u32": 500
+                          }
+                        },
+                        {
+                          "key": {
+                            "symbol": "shares"
+                          },
+                          "val": {
+                            "i128": {
+                              "hi": 0,
+                              "lo": 1000000000
+                            }
                           }
                         },
                         {
@@ -1572,7 +1654,7 @@
                 "val": {
                   "i128": {
                     "hi": 0,
-                    "lo": 1000000000
+                    "lo": 2000000000
                   }
                 }
               }
@@ -1626,7 +1708,7 @@
                 "val": {
                   "i128": {
                     "hi": 0,
-                    "lo": 1000000000
+                    "lo": 2000000000
                   }
                 }
               }
@@ -2405,7 +2487,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 0
+                          "lo": 1
                         }
                       }
                     },
@@ -2478,7 +2560,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 1388000000
+                          "lo": 1646666666
                         }
                       }
                     },
@@ -2551,7 +2633,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 1082000000
+                          "lo": 823333333
                         }
                       }
                     },
@@ -2809,7 +2891,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 9999999000000000
+                          "lo": 9999998000000000
                         }
                       }
                     },
@@ -2882,7 +2964,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 1000000000
+                          "lo": 2000000000
                         }
                       }
                     },

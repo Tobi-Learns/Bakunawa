@@ -64,14 +64,16 @@ export interface OutcomeView {
   margin: number;
   losingPool: bigint;
   rakeAmount: bigint;
-  sumWeights: bigint;
-  winnerStake: bigint;
+  sumShares: bigint; // total winning shares (unified split, 1.13)
+  regMoneyWinner: bigint; // regular money on the winning side (redeem money-back)
+  regSharesWinner: bigint; // regular shares on the winning side
 }
 
 export interface PositionView {
   side: number;
   rung: number;
   stake: bigint;
+  shares: bigint; // DPM shares minted at entry (1.13)
   claimed: boolean;
 }
 
@@ -79,6 +81,7 @@ export interface LadderRowView {
   side: number;
   rung: number;
   stake: bigint;
+  shares: bigint; // DPM shares issued at this rung (1.13)
 }
 
 /** contracttype unit enums decode as ["Variant"] or "Variant" — normalize. */
@@ -134,6 +137,7 @@ export async function getLadder(id: bigint | number): Promise<LadderRowView[]> {
     side: Number(r.side),
     rung: Number(r.rung),
     stake: r.stake as bigint,
+    shares: r.shares as bigint,
   }));
 }
 
@@ -145,8 +149,9 @@ export async function getOutcome(id: bigint | number): Promise<OutcomeView | nul
       margin: Number(o.margin),
       losingPool: o.losing_pool as bigint,
       rakeAmount: o.rake_amount as bigint,
-      sumWeights: o.sum_weights as bigint,
-      winnerStake: o.winner_stake as bigint,
+      sumShares: o.sum_shares as bigint,
+      regMoneyWinner: o.reg_money_winner as bigint,
+      regSharesWinner: o.reg_shares_winner as bigint,
     };
   } catch {
     return null; // not settled
@@ -165,6 +170,7 @@ export async function getPositions(
     side: Number(p.side),
     rung: Number(p.rung),
     stake: p.stake as bigint,
+    shares: p.shares as bigint,
     claimed: Boolean(p.claimed),
   }));
 }

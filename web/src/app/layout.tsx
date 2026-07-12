@@ -58,8 +58,8 @@ export default function RootLayout({
           <Header />
           <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-8">{children}</main>
           <footer className="border-t border-neutral-800 py-4 text-center text-xs text-neutral-500">
-            Bakunawa · dominance prediction market on Stellar testnet · multipliers are
-            relative weights, never fixed odds
+            Bakunawa · dominance prediction market on Stellar testnet · share prices are
+            probabilities; payouts are a parimutuel pool split, not a fixed $1
           </footer>
         </WalletProvider>
       </body>

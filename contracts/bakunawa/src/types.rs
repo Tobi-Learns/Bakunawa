@@ -70,37 +70,43 @@ pub struct MarketParams {
     pub ticket_b: Address,
 }
 
-/// Written once at settlement; claims are computed from this + the stake
-/// aggregates (never recomputed from the outcome side).
+/// Written once at settlement; claims/redeems are computed from this + the
+/// aggregates (never recomputed from the outcome side). Unified share model
+/// (1.13): every winning share splits the raked losing pool uniformly.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Outcome {
-    pub winner: u32,           // 0 = side_a, 1 = side_b
-    pub margin: u32,           // actual margin in margin units
+    pub winner: u32,             // 0 = side_a, 1 = side_b
+    pub margin: u32,             // actual margin in margin units
     pub losing_pool: i128,
-    pub rake_amount: i128,     // transferred to treasury at settlement
-    pub sum_weights: i128,     // total winning weight
-    pub winner_stake: i128,    // SideStake of the winning side (mult numerator)
+    pub rake_amount: i128,       // transferred to treasury at settlement
+    pub sum_shares: i128,        // total WINNING shares (regular + winning convictions)
+    pub reg_money_winner: i128,  // regular money on the winning side (redeem money-back)
+    pub reg_shares_winner: i128, // regular shares on the winning side (redeem denominator)
 }
 
 /// One conviction (rung >= 1 always — regular predictions are ticket tokens,
-/// not positions). A predictor may hold several convictions per market.
+/// not positions). Locked/non-transferable, but SHARE-denominated (1.13): the
+/// stake is DPM-priced into `shares` at entry, which set the settlement split.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Position {
     pub side: u32,
     pub rung: u32,
-    pub stake: i128,
+    pub stake: i128,  // USDC put in (returned to the holder if it wins)
+    pub shares: i128, // DPM shares minted at entry (the settlement weight)
     pub claimed: bool,
 }
 
-/// Ladder row for UI reads (implied payouts are computed client-side).
+/// Ladder row for UI reads (implied payouts are computed client-side). Carries
+/// both the money (`stake`) and the DPM `shares` at each rung (1.13).
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct LadderRow {
     pub side: u32,
     pub rung: u32,
     pub stake: i128,
+    pub shares: i128,
 }
 
 #[contracttype]
@@ -111,8 +117,11 @@ pub enum DataKey {
     Treasury,   // rake destination
     Market(u64),
     Outcome(u64),
-    /// (market, side, rung>=1) -> total CONVICTION stake at exactly this rung
+    /// (market, side, rung>=1) -> total CONVICTION stake (money) at exactly this rung
     Agg(u64, u32, u32),
+    /// (market, side, rung>=1) -> total CONVICTION SHARES at exactly this rung
+    /// (1.13: convictions are DPM-priced; shares set the settlement split)
+    AggShares(u64, u32, u32),
     /// (market, side) -> total stake on the side (regular + convictions)
     SideStake(u64, u32),
     /// (market, side) -> total REGULAR (ticket-minted) MONEY on the side

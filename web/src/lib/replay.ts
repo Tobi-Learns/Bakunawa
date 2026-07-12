@@ -3,7 +3,7 @@
 // plot — pool size and per-rung implied payout from listing to lock. Pure
 // function over DB rows; reuses the same parimutuel math the live UI shows.
 
-import { impliedRange, type LadderRow } from "./parimutuel";
+import { quoteBuy, mintShares, EPS, type LadderRow } from "./parimutuel";
 import { crowdForecast } from "./forecast";
 import { sharesForDollars } from "./dpm";
 
@@ -43,21 +43,33 @@ export function replaySeries(
   events: ReplayEvent[],
 ): SeriesPoint[] {
   const allRungs = [0, ...rungs];
-  const ladder = new Map<string, bigint>();
+  const money = new Map<string, bigint>();
+  const shareMap = new Map<string, bigint>();
   for (const side of [0, 1]) {
-    for (const r of allRungs) ladder.set(`${side}-${r}`, 0n);
+    for (const r of allRungs) {
+      money.set(`${side}-${r}`, 0n);
+      shareMap.set(`${side}-${r}`, 0n);
+    }
   }
   const rows = (): LadderRow[] =>
-    [...ladder.entries()].map(([k, stake]) => {
+    [...money.entries()].map(([k, stake]) => {
       const [side, rung] = k.split("-").map(Number);
-      return { side, rung, stake };
+      return { side, rung, stake, shares: shareMap.get(k) ?? 0n };
     });
 
   const sorted = [...events].sort((a, b) => a.at.getTime() - b.at.getTime());
   const points: SeriesPoint[] = [];
   for (const e of sorted) {
     const key = `${e.side}-${e.rung}`;
-    ladder.set(key, (ladder.get(key) ?? 0n) + e.stake);
+    // DPM shares this entry mints, priced against the pre-event pool (C_i(rung)).
+    const pre = rows();
+    const total = Number(pre.reduce((a, r) => a + r.stake, 0n));
+    const c = pre
+      .filter((r) => r.side === e.side && r.rung >= e.rung)
+      .reduce((a, r) => a + Number(r.stake), 0);
+    const minted = mintShares(c, total, Number(e.stake));
+    money.set(key, (money.get(key) ?? 0n) + e.stake);
+    shareMap.set(key, (shareMap.get(key) ?? 0n) + BigInt(Math.round(minted)));
     const snapshot = rows();
     const pool = snapshot.reduce((a, r) => a + r.stake, 0n);
     const fc = crowdForecast(snapshot, rungs);
@@ -89,7 +101,7 @@ export function replaySeries(
             .filter((r) => r.side === side && r.rung >= rung)
             .reduce((a, r) => a + r.stake, 0n);
           if (sReal <= 0n) return { side, rung, roi: null };
-          const min = impliedRange(snapshot, side, rung, rungs, rakeBps)?.min;
+          const min = quoteBuy(snapshot, side, rung, EPS, rungs, rakeBps).range?.min;
           return {
             side,
             rung,

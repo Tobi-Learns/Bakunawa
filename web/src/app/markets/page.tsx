@@ -20,30 +20,6 @@ interface Card {
   title?: string;
 }
 
-/** Map a DB row (bigints serialized as strings) back to the card shape. */
-function cardFromApi(row: Record<string, unknown>): Card {
-  return {
-    market: {
-      id: BigInt(row.id as string),
-      sideA: row.sideA as string,
-      sideB: row.sideB as string,
-      rungs: row.rungs as number[],
-      closeTs: Number(row.closeTs),
-      settleTs: Number(row.settleTs),
-      oracle: row.oracle as MarketView["oracle"],
-      asset: (row.asset as string) ?? "",
-      baseline: BigInt((row.baseline as string) ?? "0"),
-      rakeBps: Number(row.rakeBps),
-      minPool: BigInt((row.minPool as string) ?? "0"),
-      ticketA: (row.ticketA as string) ?? "",
-      ticketB: (row.ticketB as string) ?? "",
-      status: row.status as MarketView["status"],
-    },
-    pool: BigInt((row.pool as string) ?? "0"),
-    title: (row.title as string) ?? undefined,
-  };
-}
-
 const STATUS_FILTERS: ("All" | UiStatus)[] = [
   "All",
   "Open",
@@ -64,30 +40,32 @@ export default function MarketsPage() {
   useEffect(() => {
     let live = true;
     (async () => {
-      // Read-through: indexer-backed API first, direct chain reads as fallback
+      // The market LIST + pool come from chain via the known-ids registry, so
+      // browse always reflects the DEPLOYED contract. The DB (/api/markets) is
+      // used only to ENRICH curator titles — it isn't scoped by contract, so it
+      // can hold rows from a retired contract and must never drive the list.
+      const titles: Record<string, string> = {};
       try {
         const res = await fetch("/api/markets");
         if (res.ok) {
-          const { markets } = (await res.json()) as {
-            markets?: Record<string, unknown>[];
-          };
-          if (markets && markets.length > 0) {
-            if (live) {
-              setCards(markets.map(cardFromApi));
-              setLoading(false);
-            }
-            return;
+          const { markets } = (await res.json()) as { markets?: Record<string, unknown>[] };
+          for (const m of markets ?? []) {
+            if (m.title) titles[String(m.id)] = m.title as string;
           }
         }
       } catch {
-        // API/DB unavailable — fall back to chain
+        // DB unavailable — titles fall back to the on-chain sides
       }
       const found: Card[] = [];
       await Promise.all(
         knownMarketIds().map(async (id) => {
           try {
             const [market, ladder] = await Promise.all([getMarket(id), getLadder(id)]);
-            found.push({ market, pool: ladder.reduce((a, r) => a + r.stake, 0n) });
+            found.push({
+              market,
+              pool: ladder.reduce((a, r) => a + r.stake, 0n),
+              title: titles[String(id)],
+            });
           } catch {
             // unknown/removed id — skip
           }

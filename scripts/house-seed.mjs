@@ -11,7 +11,7 @@
 
 import { execSync } from "child_process";
 
-const CONTRACT = "CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP";
+const CONTRACT = "CBQC2M3DIK3GRXPOWL3R2PR3YGZMY43CVRNZEUWYFZB6I4W5PO43KRAW";
 const DECAY = 0.65;
 
 const [marketId, totalUsdc, source = "platform"] = process.argv.slice(2);

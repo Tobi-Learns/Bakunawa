@@ -11,7 +11,7 @@
 import type { LadderRowView, MarketView, OutcomeView } from "@/lib/bakunawa";
 import { formatUsdc } from "@/lib/config";
 import type { UiStatus } from "@/lib/market-status";
-import { impliedRange, outcomeRung, type RungState } from "@/lib/parimutuel";
+import { probeOutcome, quoteBuy, type RungState } from "@/lib/parimutuel";
 import type { LiveMove } from "@/lib/reflector";
 
 function fmtRoi(roi: number): string {
@@ -63,7 +63,7 @@ export function Ladder({
     if (status === "Settled" && outcome)
       return stake > 0n ? (
         <StateCell
-          rs={outcomeRung(ladder, outcome.winner, outcome.margin, side, rung, market.rakeBps)}
+          rs={probeOutcome(ladder, side, rung, outcome.winner, outcome.margin, market.rakeBps)}
         />
       ) : (
         <span className="text-neutral-700">—</span>
@@ -71,14 +71,14 @@ export function Ladder({
     if ((status === "Locked" || status === "Settling") && move && move.winningSide !== null)
       return stake > 0n ? (
         <StateCell
-          rs={outcomeRung(ladder, move.winningSide, move.units, side, rung, market.rakeBps)}
+          rs={probeOutcome(ladder, side, rung, move.winningSide, move.units, market.rakeBps)}
         />
       ) : (
         <span className="text-neutral-700">—</span>
       );
-    // Open (or locked without a live feed): the implied-payout RANGE — a
-    // position's return depends on how many same-side convictions land vs die.
-    const range = impliedRange(ladder, side, rung, market.rungs, market.rakeBps);
+    // Open (or locked without a live feed): the implied-payout RANGE for a
+    // marginal $1 — the return depends on how many same-side convictions land.
+    const range = quoteBuy(ladder, side, rung, 10_000_000, market.rungs, market.rakeBps).range;
     if (range === null) return <span className="text-neutral-700">—</span>;
     const point = Math.abs(range.max - range.min) < 0.005;
     return (
