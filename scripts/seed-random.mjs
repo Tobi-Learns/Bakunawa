@@ -9,7 +9,7 @@
 
 import { execSync } from "child_process";
 
-const CONTRACT = "CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP";
+const CONTRACT = "CBQC2M3DIK3GRXPOWL3R2PR3YGZMY43CVRNZEUWYFZB6I4W5PO43KRAW";
 const [marketId, numTradesArg, source = "platform"] = process.argv.slice(2);
 if (!marketId || !numTradesArg) {
   console.error("usage: node scripts/seed-random.mjs <marketId> <numTrades> [source]");

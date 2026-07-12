@@ -4,7 +4,7 @@
 export const CONFIG = {
   contractId:
     process.env.NEXT_PUBLIC_BAKUNAWA_CONTRACT_ID ??
-    "CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP", // v4 + D2 dynamic mint pricing
+    "CBQC2M3DIK3GRXPOWL3R2PR3YGZMY43CVRNZEUWYFZB6I4W5PO43KRAW", // 1.13 unified shares + money-share pricing
   // Ticket assets are issued by the `issuer` identity (classic assets BK<id>A/B)
   ticketIssuer: "GDE4WALPGYAWMBBTYUUMRH5CLM3GJWQAUYXAT4HQ7WEXDMOOUGU33Q5B",
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "https://soroban-testnet.stellar.org",

@@ -2,9 +2,10 @@
 // indexer/DB (Phase 1.6) becomes the real browse source; until then the
 // registry is built-in demo ids plus any id successfully opened locally.
 
-// Demo catalog on the current D2 contract (CDL2YD4D…). Earlier ids (1xxx–4xxx)
-// lived on retired contracts (4xxx = the par-mint v4 retired 2026-07-10).
-const BUILTIN: number[] = [5012, 5011, 5010];
+// Demo catalog on the 1.13 unified-shares contract (CBQC2M3D…). Earlier ids
+// (1xxx–5xxx) lived on retired contracts (5xxx = the D2 contract retired
+// 2026-07-12 for the unified share model + money-share pricing).
+const BUILTIN: number[] = [6012, 6011, 6010];
 const KEY = "bakunawa:known-markets";
 
 export function knownMarketIds(): number[] {
