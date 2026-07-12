@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS "BakunawaPosition" (
   "side"     INTEGER NOT NULL,
   "rung"     INTEGER NOT NULL,
   "stake"    BIGINT NOT NULL,
+  "shares"   BIGINT NOT NULL DEFAULT 0,
   "txHash"   TEXT NOT NULL,
   "ledger"   INTEGER NOT NULL,
   "at"       TIMESTAMP(3) NOT NULL
@@ -57,6 +58,29 @@ await client.query(
 );
 await client.query(
   `CREATE INDEX IF NOT EXISTS "BakunawaPosition_marketId_idx" ON "BakunawaPosition"("marketId")`,
+);
+// 5a: shares column on pre-existing installs (no-op on fresh CREATE above)
+await client.query(
+  `ALTER TABLE "BakunawaPosition" ADD COLUMN IF NOT EXISTS "shares" BIGINT NOT NULL DEFAULT 0`,
+);
+await client.query(`
+CREATE TABLE IF NOT EXISTS "BakunawaExit" (
+  "id"       TEXT PRIMARY KEY,
+  "marketId" BIGINT NOT NULL REFERENCES "BakunawaMarket"("id"),
+  "holder"   TEXT NOT NULL,
+  "kind"     TEXT NOT NULL,
+  "side"     INTEGER,
+  "shares"   BIGINT,
+  "payout"   BIGINT NOT NULL,
+  "txHash"   TEXT NOT NULL,
+  "ledger"   INTEGER NOT NULL,
+  "at"       TIMESTAMP(3) NOT NULL
+)`);
+await client.query(
+  `CREATE INDEX IF NOT EXISTS "BakunawaExit_holder_idx" ON "BakunawaExit"("holder")`,
+);
+await client.query(
+  `CREATE INDEX IF NOT EXISTS "BakunawaExit_marketId_idx" ON "BakunawaExit"("marketId")`,
 );
 await client.query(`
 CREATE TABLE IF NOT EXISTS "BakunawaCursor" (

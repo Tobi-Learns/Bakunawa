@@ -53,6 +53,7 @@ export interface IndexerRun {
   eventsSeen: number;
   marketsSynced: string[];
   positionsInserted: number;
+  exitsInserted: number;
 }
 
 export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun> {
@@ -71,11 +72,25 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
     side: number;
     rung: number;
     stake: bigint;
+    shares: bigint;
+    txHash: string;
+    ledger: number;
+    at: Date;
+  };
+  type NewExit = {
+    id: string;
+    marketId: bigint;
+    holder: string;
+    kind: string;
+    side: number | null;
+    shares: bigint | null;
+    payout: bigint;
     txHash: string;
     ledger: number;
     at: Date;
   };
   const positions: NewPos[] = [];
+  const exits: NewExit[] = [];
   let eventsSeen = 0;
   let latestLedger = latest.sequence;
 
@@ -104,14 +119,17 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
         const kind = String(topics[0]);
         const marketId = BigInt(topics[1] as bigint | number | string);
         touched.add(marketId);
-        // v4 entry events: "mint" (regular tickets, value (side, amount)) and
-        // "conviction" (value (side, rung, amount)). Both recorded as history
-        // rows; live regular exposure is the ticket balance, not this table.
+        // 1.13 entry events: "mint" (regular, value (side, amount, shares))
+        // and "conviction" (value (side, rung, amount, shares)). Both recorded
+        // as history rows with the DPM shares issued (5a — the cost-basis
+        // source); live regular exposure is the ticket balance, not this table.
         if (kind === "mint" || kind === "conviction") {
           const value = scValToNative(e.value) as (number | bigint)[];
           const side = Number(value[0]);
           const rung = kind === "mint" ? 0 : Number(value[1]);
           const stake = BigInt(value[kind === "mint" ? 1 : 2]);
+          // pre-1.13 contracts had no shares element — default 0 (basis unknown)
+          const shares = BigInt(value[kind === "mint" ? 2 : 3] ?? 0);
           positions.push({
             id: e.id,
             marketId,
@@ -119,6 +137,26 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
             side,
             rung,
             stake,
+            shares,
+            txHash: e.txHash ?? "",
+            ledger: e.ledger,
+            at: new Date(e.ledgerClosedAt),
+          });
+        }
+        // 5a exit events: "redeem" (value (side, amount, payout)) and "claim"
+        // (value = payout) — the realized-P&L legs for the profile layer.
+        if (kind === "redeem" || kind === "claim") {
+          const value = scValToNative(e.value) as number | bigint | (number | bigint)[];
+          const isRedeem = kind === "redeem";
+          const arr = Array.isArray(value) ? value : null;
+          exits.push({
+            id: e.id,
+            marketId,
+            holder: String(topics[2]),
+            kind,
+            side: isRedeem && arr ? Number(arr[0]) : null,
+            shares: isRedeem && arr ? BigInt(arr[1]) : null,
+            payout: isRedeem && arr ? BigInt(arr[2]) : BigInt(value as number | bigint),
             txHash: e.txHash ?? "",
             ledger: e.ledger,
             at: new Date(e.ledgerClosedAt),
@@ -143,18 +181,27 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
   }
 
   let positionsInserted = 0;
-  if (positions.length > 0) {
-    // only keep positions whose market row exists (FK)
+  let exitsInserted = 0;
+  if (positions.length > 0 || exits.length > 0) {
+    // only keep rows whose market row exists (FK)
     const known = new Set(
       (await db.market.findMany({ select: { id: true } })).map((m) => m.id.toString()),
     );
-    const insertable = positions.filter((p) => known.has(p.marketId.toString()));
-    if (insertable.length > 0) {
+    const insertablePos = positions.filter((p) => known.has(p.marketId.toString()));
+    if (insertablePos.length > 0) {
       const res = await db.position.createMany({
-        data: insertable,
+        data: insertablePos,
         skipDuplicates: true, // event id is the PK — reruns are safe
       });
       positionsInserted = res.count;
+    }
+    const insertableExits = exits.filter((x) => known.has(x.marketId.toString()));
+    if (insertableExits.length > 0) {
+      const res = await db.exit.createMany({
+        data: insertableExits,
+        skipDuplicates: true,
+      });
+      exitsInserted = res.count;
     }
   }
 
@@ -166,7 +213,7 @@ export async function runIndexer(explicitIds: bigint[] = []): Promise<IndexerRun
 
   await samplePrices().catch(() => {}); // best-effort, never fails the run
 
-  return { scannedFrom, latestLedger, eventsSeen, marketsSynced: synced, positionsInserted };
+  return { scannedFrom, latestLedger, eventsSeen, marketsSynced: synced, positionsInserted, exitsInserted };
 }
 
 /** 1.9c: record a Reflector price sample for every asset with a live market

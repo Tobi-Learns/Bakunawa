@@ -44,6 +44,7 @@ model Market {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   positions   Position[]
+  exits       Exit[]
 
   @@index([status])
   @@map("BakunawaMarket")
@@ -57,6 +58,7 @@ model Position {
   side      Int
   rung      Int
   stake     BigInt
+  shares    BigInt   @default(0) // 5a: DPM shares issued (mint/conviction events publish them; 0 = pre-5a row, basis unknown)
   txHash    String
   ledger    Int
   at        DateTime
@@ -64,6 +66,26 @@ model Position {
   @@index([predictor])
   @@index([marketId])
   @@map("BakunawaPosition")
+}
+
+/// 5a: exit events (redeem/claim) — realized P&L legs for the per-address
+/// profile. Same idempotence as Position: RPC event id is the PK.
+model Exit {
+  id       String   @id // RPC event id
+  marketId BigInt
+  market   Market   @relation(fields: [marketId], references: [id])
+  holder   String
+  kind     String // "redeem" | "claim"
+  side     Int? // redeem only (claim pays all winning convictions at once)
+  shares   BigInt? // redeem only: share amount returned to custody
+  payout   BigInt
+  txHash   String
+  ledger   Int
+  at       DateTime
+
+  @@index([holder])
+  @@index([marketId])
+  @@map("BakunawaExit")
 }
 
 model IndexerCursor {
