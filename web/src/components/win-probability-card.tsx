@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LadderRowView, MarketView } from "@/lib/bakunawa";
 import { crowdForecast } from "@/lib/forecast";
+import { ChartSkeleton } from "./skeleton";
 import { WinProbabilityChart, type SeriesPointDto } from "./charts";
 
 interface SeriesDto {
@@ -77,7 +78,7 @@ export function WinProbabilityCard({
       {data ? (
         <WinProbabilityChart points={points} sideA={data.sideA} sideB={data.sideB} />
       ) : (
-        <p className="text-xs text-neutral-600">Loading…</p>
+        <ChartSkeleton />
       )}
     </section>
   );

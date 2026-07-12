@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import type { MarketView } from "@/lib/bakunawa";
+import { ChartSkeleton } from "./skeleton";
 import {
   PoolChart,
   PriceChart,
@@ -65,7 +66,7 @@ export function MarketCharts({ market }: { market: MarketView }) {
           {series ? (
             <PoolChart points={series.points} />
           ) : (
-            <p className="text-xs text-neutral-600">Loading…</p>
+            <ChartSkeleton />
           )}
         </div>
         <div className="rounded-lg border border-neutral-800 p-4">
@@ -81,7 +82,7 @@ export function MarketCharts({ market }: { market: MarketView }) {
               oracle={series.oracle}
             />
           ) : (
-            <p className="text-xs text-neutral-600">Loading…</p>
+            <ChartSkeleton />
           )}
         </div>
         {market.oracle === "Reflector" && (
@@ -98,7 +99,7 @@ export function MarketCharts({ market }: { market: MarketView }) {
                 sideB={prices.sideB}
               />
             ) : (
-              <p className="text-xs text-neutral-600">Loading…</p>
+              <ChartSkeleton />
             )}
           </div>
         )}
