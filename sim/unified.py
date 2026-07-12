@@ -321,6 +321,44 @@ def exp_snipe():
 
 
 # ---------------------------------------------------------------------------
+# U3: re-derived MIXED worked example (the reference 1.13c must reproduce)
+# ---------------------------------------------------------------------------
+
+# Round inputs; a fixed seed + ORDERED buy list (DPM is order-dependent, unlike
+# the old DemandMult worked example). Settle at UP by 10 so the >=20 rung DIES
+# and banks. Exercises: multi-rung winners, banking, order dependence (early vs
+# late >=10), a losing side, exact conservation. The contract (1.13b) reproduces
+# this to fixed-point-ln tolerance; conservation is exact.
+
+WEX_SEED_NEUTRAL = 20.0
+WEX_SEED_RUNGS = [(10, 4.0), (20, 2.0)]  # UP-side rung-distributed seed (mandatory)
+WEX_BUYS = [
+    # (who,           side, rung, dollars)
+    ("P1_UP_Neutral",   0,  0, 10.0),
+    ("P2_UP10_early",   0, 10, 10.0),
+    ("P3_UP20",         0, 20, 10.0),
+    ("P5_UP10_late",    0, 10, 10.0),  # after P2 -> fewer shares (order dependence)
+    ("P4_DOWN_Neutral", 1,  0, 20.0),
+]
+WEX_WINNER, WEX_MARGIN, WEX_RAKE = 0, 10, 0.03
+
+
+def worked_example():
+    b = Book()
+    b.seed(WEX_SEED_NEUTRAL)                 # UP & DOWN Neutral at par
+    for r, amt in WEX_SEED_RUNGS:
+        b.seed_rung(0, r, amt)               # UP rung seed
+    trace = []
+    for who, side, rung, d in WEX_BUYS:
+        c0, tot0 = b.cum(side, rung), b.total()
+        sh = b.buy(who, side, rung, d)
+        price = 2 * c0 / tot0 if c0 > 0 else 1.0
+        trace.append((who, side, rung, d, c0, tot0, price, sh))
+    pay, chk = settle(b.pos, WEX_WINNER, WEX_MARGIN, WEX_RAKE)
+    return b, trace, pay, chk
+
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 
@@ -338,6 +376,7 @@ def main():
     seed_dom = dominated_rungs(seed_rows)
     early = exp_early()
     snipe = exp_snipe()
+    wex_book, wex_trace, wex_pay, wex_chk = worked_example()
 
     L = []
     p = L.append
@@ -421,6 +460,45 @@ def main():
     p(f"- sniper mints only **{snipe['sniper_shares_per_$']:.2f} shares/$**")
     p(f"- ROI: honest-early **{snipe['honest_roi']*100:+.1f}%** vs sniper "
       f"**{snipe['sniper_roi']*100:+.1f}%** — early conviction stays ahead.\n")
+
+    p("## 6. Mixed worked example — the U3 reference for 1.13c\n")
+    p("Re-derived under the unified model (the old DemandMult worked example is "
+      "order-independent; DPM is not, so this fixes a seed + ordered buy list). "
+      "Round inputs; settle at **UP by 10** so the **>=20 rung dies and banks**. "
+      "The contract (1.13b) must reproduce this to fixed-point-`ln` tolerance; "
+      "conservation is exact.\n")
+    p(f"**Seed (par):** UP Neutral ${WEX_SEED_NEUTRAL:.0f}, DOWN Neutral "
+      f"${WEX_SEED_NEUTRAL:.0f}, " +
+      ", ".join(f"UP>={r} ${a:.0f}" for r, a in WEX_SEED_RUNGS) + ".\n")
+    p("**Buys (in order)** — each priced against `C_i(rung)` at that moment:\n")
+    p("| # | who | side | rung | $ in | C_i(m) before | price $/sh | shares |")
+    p("|---|---|---|---|---|---|---|---|")
+    for i, (who, side, rung, d, c0, tot0, price, sh) in enumerate(wex_trace, 1):
+        sd = "UP" if side == 0 else "DOWN"
+        rg = "Neutral" if rung == 0 else f">={rung}"
+        p(f"| {i} | {who} | {sd} | {rg} | {d:.0f} | {c0:.2f} | {price:.4f} | {sh:.4f} |")
+    p(f"\nNote P2 (early >=10) got **{wex_trace[1][7]:.4f}** shares vs P5 (late "
+      f">=10) **{wex_trace[3][7]:.4f}** for the same $10 — order dependence.\n")
+    total = wex_chk["total"]
+    win_idx = [i for i, ps in enumerate(wex_book.pos) if ps.side == WEX_WINNER and ps.rung <= WEX_MARGIN]
+    banked = sum(wex_book.pos[i].dollars for i, ps in enumerate(wex_book.pos)
+                 if ps.side == WEX_WINNER and ps.rung > WEX_MARGIN)
+    p(f"**Settlement — UP by 10** (winners = UP rung<=10; UP>=20 banks; DOWN "
+      f"loses). Pool **${total:.2f}**, losing pool "
+      f"**${total - sum(wex_book.pos[i].dollars for i in win_idx):.2f}** "
+      f"(incl. **${banked:.2f}** banked from the dead UP>=20), rake "
+      f"**${wex_chk['rake']:.2f}**.\n")
+    p("| position | side | rung | $ in | shares | payout | ROI |")
+    p("|---|---|---|---|---|---|---|")
+    for i, ps in enumerate(wex_book.pos):
+        sd = "UP" if ps.side == 0 else "DOWN"
+        rg = "Neutral" if ps.rung == 0 else f">={ps.rung}"
+        payout = wex_pay[i]
+        roi = payout / ps.dollars - 1.0 if ps.dollars else 0.0
+        p(f"| {ps.who} | {sd} | {rg} | {ps.dollars:.2f} | {ps.shares:.4f} | "
+          f"{payout:.4f} | {roi*100:+.1f}% |")
+    p(f"\nConservation residual: **{abs(wex_chk['residual']):.2e}** "
+      "(paid + rake == pool). This table is the 1.13c acceptance target.\n")
 
     p("## Verdict\n")
     p("**GATE: PASS, with one hard requirement.** The unified model is "
