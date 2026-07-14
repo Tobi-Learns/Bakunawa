@@ -175,7 +175,30 @@ export async function getPositions(
   }));
 }
 
+/** Connected wallet's test-USDC (stake asset) balance, in stroops. */
+export async function getUsdcBalance(holder: string): Promise<bigint> {
+  return (await simulateRead(CONFIG.usdcSac, "balance", addr(holder))) as bigint;
+}
+
 // --- Writes (build XDR for the wallet to sign) ---
+
+/**
+ * Map a raw host-error simulation dump into a user-facing message. The most
+ * common failure is a USDC (or ticket) transfer that would overdraw the payer —
+ * the Stellar Asset Contract throws "resulting balance is not within the
+ * allowed range". Match on that string, not on Error(Contract, #N): the numeric
+ * code is contract-specific and unsafe to interpret out of context. Anything
+ * unrecognized still surfaces its raw text so nothing is silently swallowed.
+ */
+function translateSimError(err: string | undefined): Error {
+  const raw = err ?? "unknown error";
+  if (/resulting balance is not within the allowed range/i.test(raw)) {
+    return new Error(
+      "Insufficient balance — not enough test USDC for this. Top up your wallet or try a smaller amount.",
+    );
+  }
+  return new Error(`simulation failed: ${raw}`);
+}
 
 export async function buildTxXdr(
   source: string,
@@ -193,7 +216,7 @@ export async function buildTxXdr(
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     const err = (sim as rpc.Api.SimulateTransactionErrorResponse).error;
-    throw new Error(`simulation failed: ${err}`);
+    throw translateSimError(err);
   }
   // Resource padding (StellarPay lesson): double write bytes so execution
   // paths that diverge from the simulated one don't blow the budget.
