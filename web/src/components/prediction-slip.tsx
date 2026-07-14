@@ -16,12 +16,13 @@ import {
   buildMintTicketsXdr,
   buildTrustlineXdr,
   explorerTxUrl,
+  getUsdcBalance,
   submitAndWait,
   ticketAssetCode,
   type LadderRowView,
   type MarketView,
 } from "@/lib/bakunawa";
-import { CONFIG, parseUsdc } from "@/lib/config";
+import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
 import { sharePrice, sharesForDollars } from "@/lib/dpm";
 import { quoteBuy } from "@/lib/parimutuel";
 import { recordNeutralEntry, recordPositionMeta } from "@/lib/positions-meta";
@@ -166,6 +167,18 @@ export function PredictionSlip({
     if (selling) return sell();
     if (stake <= 0n) return;
     try {
+      // Pre-flight: fail fast with an exact-number message before any signing.
+      // The chokepoint in buildTxXdr still catches this generically, but here
+      // we can tell the user what they have vs. what the buy costs.
+      setPhase({ step: "busy", what: "Checking balance…" });
+      const bal = await getUsdcBalance(address);
+      if (bal < stake) {
+        setPhase({
+          step: "error",
+          message: `Insufficient balance — you have ${formatUsdc(bal)} USDC but this costs ${formatUsdc(stake)} USDC.`,
+        });
+        return;
+      }
       setPhase({ step: "busy", what: "Checking trustlines…" });
       const trusts = [await buildTrustlineXdr(address)];
       if (mode === "prediction") {
