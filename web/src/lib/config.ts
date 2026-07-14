@@ -4,7 +4,7 @@
 export const CONFIG = {
   contractId:
     process.env.NEXT_PUBLIC_BAKUNAWA_CONTRACT_ID ??
-    "CBQC2M3DIK3GRXPOWL3R2PR3YGZMY43CVRNZEUWYFZB6I4W5PO43KRAW", // 1.13 unified shares + money-share pricing
+    "CABM224YYRE67THADIM7NPYKZWM6Q7EOHOVYSD2KRYLRW6BDLTCTL72R", // Phase 2 optimistic oracle (unified shares + $0.50 pricing); deployed 2026-07-14
   // Ticket assets are issued by the `issuer` identity (classic assets BK<id>A/B)
   ticketIssuer: "GDE4WALPGYAWMBBTYUUMRH5CLM3GJWQAUYXAT4HQ7WEXDMOOUGU33Q5B",
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "https://soroban-testnet.stellar.org",
