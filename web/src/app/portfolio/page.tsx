@@ -364,6 +364,11 @@ export default function PortfolioPage() {
                     <span className="text-ink-muted">#{String(g.market.id)}</span>
                   </Link>
                   <StatusPill status={g.status} />
+                  {g.status === "Proposed" && (
+                    <span className="text-xs text-warning">
+                      claims frozen · dispute window
+                    </span>
+                  )}
                 </div>
                 {canClaim && address && (
                   <button

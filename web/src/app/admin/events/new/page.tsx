@@ -11,6 +11,7 @@ import { buildCreateMarketXdr, patchMarketMeta } from "@/lib/admin";
 import { explorerTxUrl, submitAndWait } from "@/lib/bakunawa";
 import { parseUsdc } from "@/lib/config";
 import { snowflakeU64 } from "@/lib/ids";
+import { settlementSourceFor } from "@/lib/settlement-sources";
 import { useWallet } from "@/lib/wallet-context";
 
 const label = "mb-1 block text-sm text-ink-muted";
@@ -33,6 +34,8 @@ export default function NewEventPage() {
     minPool: "0",
     ticketA: "",
     ticketB: "",
+    disputeSecs: "86400", // Admin oracle dispute window (Phase 2); 86400 = 24h
+    disputeBondBps: 100, // Admin oracle bond = max(5 USDC, bps * pool)
   });
   const [state, setState] = useState<
     | { step: "idle" }
@@ -42,6 +45,8 @@ export default function NewEventPage() {
   >({ step: "idle" });
 
   const set = (k: string, v: string | number) => setForm((f) => ({ ...f, [k]: v }));
+  // 2g: the category pins the settlement authority (no free-form source input).
+  const source = settlementSourceFor(form.category);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +83,9 @@ export default function NewEventPage() {
         minPool: parseUsdc(form.minPool || "0"),
         ticketA: form.ticketA.trim(),
         ticketB: form.ticketB.trim(),
+        // Admin oracle only — Reflector markets force the window to 0 on-chain.
+        disputeSecs: form.oracle === "Admin" ? Number(form.disputeSecs) || 86400 : 0,
+        disputeBondBps: Number(form.disputeBondBps) || 100,
       });
       setState({ step: "busy", what: "Sign in Freighter…" });
       const signed = await signTransaction(xdr);
@@ -160,6 +168,39 @@ export default function NewEventPage() {
               />
             </div>
           </div>
+          {/* 2g: settlement authority is pinned by the category (no free-form) */}
+          <p className="-mt-1 text-xs text-ink-muted">
+            Settlement authority (from category):{" "}
+            <span className="text-ink-secondary">
+              {source ? source.authority : "none for this category — set terms explicitly"}
+            </span>
+          </p>
+
+          {form.oracle === "Admin" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={label}>Dispute window (seconds; 86400 = 24h)</label>
+                <input
+                  className={input}
+                  value={form.disputeSecs}
+                  onChange={(e) => set("disputeSecs", e.target.value.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                />
+              </div>
+              <div>
+                <label className={label}>Dispute bond (bps of pool; min 5 USDC)</label>
+                <input
+                  type="number"
+                  className={input}
+                  value={form.disputeBondBps}
+                  onChange={(e) => set("disputeBondBps", Number(e.target.value))}
+                  min={0}
+                  max={10000}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>Side A</label>

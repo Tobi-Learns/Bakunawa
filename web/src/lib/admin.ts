@@ -67,7 +67,14 @@ export function buildCreateMarketXdr(
   return buildTxXdr(admin, "create_market", marketParamsScVal(params));
 }
 
-export function buildSettleAdminXdr(
+// --- Phase 2 optimistic oracle (Admin markets) ---
+// The old instant `settle_admin` was removed at the 2d redeploy. Admin markets
+// now settle in two phases: propose_result -> [dispute -> resolve_dispute] ->
+// finalize. Reflector markets are unaffected (settle_oracle, instant).
+
+/** Admin posts the result and opens the dispute window (status -> Proposed).
+ *  Does NOT settle; claims/redeems stay frozen until `finalize`. */
+export function buildProposeResultXdr(
   admin: string,
   id: bigint,
   winner: number,
@@ -75,11 +82,48 @@ export function buildSettleAdminXdr(
 ): Promise<string> {
   return buildTxXdr(
     admin,
-    "settle_admin",
+    "propose_result",
     nativeToScVal(id, { type: "u64" }),
     nativeToScVal(winner, { type: "u32" }),
     nativeToScVal(margin, { type: "u32" }),
   );
+}
+
+/** Permissionless — anyone escrows the pool-proportional bond to dispute a
+ *  posted result (blocks finalize until the admin resolves it). */
+export function buildDisputeXdr(disputer: string, id: bigint): Promise<string> {
+  return buildTxXdr(
+    disputer,
+    "dispute",
+    nativeToScVal(id, { type: "u64" }),
+    new Address(disputer).toScVal(),
+  );
+}
+
+/** Admin resolves the open dispute. `uphold=true`: result stands, bond ->
+ *  treasury, window continues. `uphold=false`: correct to (winner, margin),
+ *  bond refunded, window restarts. */
+export function buildResolveDisputeXdr(
+  admin: string,
+  id: bigint,
+  uphold: boolean,
+  winner: number,
+  margin: number,
+): Promise<string> {
+  return buildTxXdr(
+    admin,
+    "resolve_dispute",
+    nativeToScVal(id, { type: "u64" }),
+    xdr.ScVal.scvBool(uphold),
+    nativeToScVal(winner, { type: "u32" }),
+    nativeToScVal(margin, { type: "u32" }),
+  );
+}
+
+/** Permissionless — finalize a posted result once its window elapses with no
+ *  open dispute. Runs the existing parimutuel settlement (unchanged). */
+export function buildFinalizeXdr(source: string, id: bigint): Promise<string> {
+  return buildTxXdr(source, "finalize", nativeToScVal(id, { type: "u64" }));
 }
 
 /** Permissionless — any connected wallet can trigger a Reflector settlement. */

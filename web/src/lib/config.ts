@@ -35,3 +35,17 @@ export function parseUsdc(v: string): bigint {
   const [whole, frac = ""] = v.split(".");
   return BigInt(whole || "0") * 10_000_000n + BigInt(frac.padEnd(7, "0").slice(0, 7) || "0");
 }
+
+// --- Phase 2 optimistic oracle (Admin markets) ---
+
+/** Global dispute-bond floor — mirrors the contract's DISPUTE_BOND_FLOOR
+ *  (5 USDC in stroops). Locked in the 2a threat-model. */
+export const DISPUTE_BOND_FLOOR = 50_000_000n;
+
+/** Bond a disputer must escrow = max(FLOOR, dispute_bond_bps * pool / 10_000).
+ *  Mirrors the contract's `dispute_bond()`; `poolAtPropose` is the frozen pool
+ *  from the Proposal (stroops), `bps` is the market's `dispute_bond_bps`. */
+export function disputeBond(poolAtPropose: bigint, bps: number): bigint {
+  const proportional = (poolAtPropose * BigInt(bps)) / 10_000n;
+  return proportional > DISPUTE_BOND_FLOOR ? proportional : DISPUTE_BOND_FLOOR;
+}
