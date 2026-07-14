@@ -19,7 +19,9 @@ export async function syncMarket(id: bigint): Promise<void> {
     getLadder(id),
     market.status === "Settled" ? getOutcome(id) : Promise.resolve(null),
   ]);
-  const pool = ladder.reduce((a, r) => a + r.stake, 0n);
+  const sidePoolA = ladder.reduce((total, row) => total + (row.side === 0 ? row.stake : 0n), 0n);
+  const sidePoolB = ladder.reduce((total, row) => total + (row.side === 1 ? row.stake : 0n), 0n);
+  const pool = sidePoolA + sidePoolB;
   const fields = {
     sideA: market.sideA,
     sideB: market.sideB,
@@ -35,6 +37,8 @@ export async function syncMarket(id: bigint): Promise<void> {
     ticketB: market.ticketB,
     status: market.status,
     pool,
+    sidePoolA,
+    sidePoolB,
     winner: outcome?.winner ?? null,
     margin: outcome?.margin ?? null,
     losingPool: outcome?.losingPool ?? null,

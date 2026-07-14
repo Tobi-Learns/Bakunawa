@@ -23,7 +23,9 @@ export default function ProfilePage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (account) setNameDraft(account.displayName ?? "");
+    if (!account) return;
+    const initial = setTimeout(() => setNameDraft(account.displayName ?? ""), 0);
+    return () => clearTimeout(initial);
   }, [account]);
 
   async function saveName() {
@@ -83,11 +85,11 @@ export default function ProfilePage() {
     }
   }
 
-  if (!loaded) return <p className="py-16 text-center text-sm text-neutral-500">Loading…</p>;
+  if (!loaded) return <p className="py-16 text-center text-sm text-ink-muted">Loading…</p>;
 
   if (!configured)
     return (
-      <p className="py-16 text-center text-sm text-neutral-400">
+      <p className="py-16 text-center text-sm text-ink-muted">
         Google sign-in isn&apos;t configured on this deployment yet.
       </p>
     );
@@ -96,13 +98,13 @@ export default function ProfilePage() {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <h1 className="text-2xl font-semibold">Profile</h1>
-        <p className="max-w-md text-sm text-neutral-400">
+        <p className="max-w-md text-sm leading-relaxed text-ink-muted">
           Sign in with Google to group your wallets into one portfolio and set a
           display name. Your wallets stay yours — the account only organizes them.
         </p>
         <button
           onClick={() => signIn("google")}
-          className="rounded bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-white"
+          className="inline-flex min-h-11 items-center rounded-md bg-action px-4 text-sm font-semibold text-action-ink hover:bg-action-hover"
         >
           Sign in with Google
         </button>
@@ -119,13 +121,13 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-semibold">Profile</h1>
         <button
           onClick={() => signOut({ callbackUrl: "/" })}
-          className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
+          className="inline-flex min-h-11 items-center rounded-md border border-line-strong bg-panel px-3 text-sm text-ink-secondary hover:border-ink-subtle"
         >
           Sign out
         </button>
       </div>
 
-      {notice && <p className="text-sm text-emerald-400">{notice}</p>}
+      {notice && <p className="text-sm text-positive">{notice}</p>}
 
       <section className="flex items-center gap-4">
         {account.image && (
@@ -133,25 +135,25 @@ export default function ProfilePage() {
           <img src={account.image} alt="" className="h-12 w-12 rounded-full" />
         )}
         <div>
-          <p className="text-neutral-100">{account.name ?? account.email}</p>
-          <p className="text-sm text-neutral-500">{account.email}</p>
+          <p className="text-ink">{account.name ?? account.email}</p>
+          <p className="text-sm text-ink-muted">{account.email}</p>
         </div>
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-neutral-300">Display name</h2>
+        <h2 className="text-sm font-medium text-ink-secondary">Display name</h2>
         <div className="flex gap-2">
           <input
             value={nameDraft}
             onChange={(e) => setNameDraft(e.target.value)}
             maxLength={40}
             placeholder={account.name ?? "Your name"}
-            className="w-64 rounded border border-neutral-700 bg-transparent px-3 py-1.5 text-sm text-neutral-100 outline-none focus:border-neutral-500"
+            className="min-h-11 w-full max-w-64 rounded-md border border-line-strong bg-panel px-3 text-sm text-ink focus:border-focus"
           />
           <button
             onClick={saveName}
             disabled={busy === "name"}
-            className="rounded bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-50"
+            className="min-h-11 rounded-md bg-action px-3 text-sm font-semibold text-action-ink hover:bg-action-hover disabled:opacity-50"
           >
             {busy === "name" ? "Saving…" : "Save"}
           </button>
@@ -159,29 +161,29 @@ export default function ProfilePage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-neutral-300">Bound wallets</h2>
-        <p className="text-xs text-neutral-500">
+        <h2 className="text-sm font-medium text-ink-secondary">Bound wallets</h2>
+        <p className="text-xs text-ink-muted">
           Binding groups a wallet&apos;s positions into your portfolio. Connect a
           wallet to bind it — keys never leave your wallet extension.
         </p>
         {account.wallets.length === 0 && (
-          <p className="text-sm text-neutral-500">No wallets bound yet.</p>
+          <p className="text-sm text-ink-muted">No wallets bound yet.</p>
         )}
         {account.wallets.map((w) => (
           <div
             key={w.address}
-            className="flex items-center justify-between rounded border border-neutral-800 px-3 py-2"
+            className="flex items-center justify-between rounded-xl border border-line bg-panel/80 px-3 py-2"
           >
-            <span className="text-sm text-neutral-200" title={w.address}>
+            <span className="text-sm text-ink-secondary" title={w.address}>
               {short(w.address)}
               {address === w.address && (
-                <span className="ml-2 text-xs text-emerald-400">connected</span>
+                <span className="ml-2 text-xs text-positive">connected</span>
               )}
             </span>
             <button
               onClick={() => unbindWallet(w.address)}
               disabled={busy === `unbind-${w.address}`}
-              className="text-xs text-neutral-500 underline hover:text-neutral-300"
+              className="inline-flex min-h-11 items-center text-xs text-ink-muted underline hover:text-ink-secondary"
             >
               unbind
             </button>
@@ -191,7 +193,7 @@ export default function ProfilePage() {
           <button
             onClick={() => bindWallet(address)}
             disabled={busy === "bind"}
-            className="self-start rounded bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-50"
+            className="min-h-11 self-start rounded-md bg-action px-3 text-sm font-semibold text-action-ink hover:bg-action-hover disabled:opacity-50"
           >
             {busy === "bind" ? "Binding…" : `Bind connected wallet (${short(address)})`}
           </button>
@@ -199,14 +201,14 @@ export default function ProfilePage() {
         {!address && (
           <button
             onClick={connect}
-            className="self-start rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-neutral-500"
+            className="min-h-11 self-start rounded-md border border-line-strong bg-panel px-3 text-sm text-ink-secondary hover:border-ink-subtle"
           >
             Connect a wallet to bind it
           </button>
         )}
       </section>
 
-      <p className="text-xs text-neutral-600">
+      <p className="text-xs leading-relaxed text-ink-subtle">
         See your combined holdings in the{" "}
         <Link href="/portfolio" className="underline">
           portfolio

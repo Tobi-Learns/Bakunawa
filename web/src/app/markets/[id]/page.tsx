@@ -40,12 +40,12 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
 
   if (error && !market)
     return (
-      <p className="text-sm text-red-400">
+      <p className="text-sm text-danger">
         Could not load market #{id}: {error}
       </p>
     );
   if (loading || !market)
-    return <p className="text-sm text-neutral-500">Reading market #{id} from chain…</p>;
+    return <p className="text-sm text-ink-muted">Reading market #{id} from chain…</p>;
 
   const status = uiStatus(market);
   const total = ladder.reduce((a, r) => a + r.stake, 0n);
@@ -60,15 +60,15 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
               {market.oracle === "Reflector"
                 ? `${market.asset}: ${market.sideA} vs ${market.sideB}`
                 : `${market.sideA} vs ${market.sideB}`}
             </h1>
             <StatusPill status={status} />
           </div>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
             {market.oracle === "Reflector"
               ? `% move from the listing snapshot · settled trustlessly by Reflector`
               : "curated event · result posted from the named official source"}{" "}
@@ -76,7 +76,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           </p>
         </div>
         <div className="text-right">
-          <div className="text-xs text-neutral-500">Total pool</div>
+          <div className="text-xs text-ink-subtle">Total pool</div>
           <div className="text-2xl font-semibold tabular-nums">
             {formatUsdc(total)} <span className="text-sm font-normal">USDC</span>
           </div>
@@ -85,7 +85,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
 
       {/* Phase banner */}
       {status === "Open" && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-900 bg-emerald-950/30 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-positive/35 bg-positive/8 px-4 py-3 text-sm">
           <span>
             Predictions open — closes in{" "}
             <b>
@@ -93,13 +93,13 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
             </b>{" "}
             ({new Date(market.closeTs * 1000).toLocaleString()})
           </span>
-          <span className="text-neutral-400">
+          <span className="text-ink-muted">
             settles {new Date(market.settleTs * 1000).toLocaleString()}
           </span>
         </div>
       )}
       {(status === "Locked" || status === "Settling") && (
-        <div className="rounded-lg border border-violet-900 bg-violet-950/30 px-4 py-3 text-sm">
+        <div className="rounded-xl border border-action/35 bg-action/8 px-4 py-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
               Predictions locked —{" "}
@@ -126,7 +126,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
             )}
           </div>
           {liveBanked !== null && liveBanked > 0n && (
-            <p className="mt-2 text-amber-400">
+            <p className="mt-2 text-warning">
               🌒 {formatUsdc(liveBanked)} USDC of failed convictions swallowed by the
               pool, if settled now.
             </p>
@@ -134,7 +134,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
       {status === "Settled" && outcome && (
-        <div className="rounded-lg border border-sky-900 bg-sky-950/40 px-4 py-3 text-sm">
+        <div className="rounded-xl border border-info/35 bg-info/8 px-4 py-3 text-sm">
           Settled: <b>{sideName(outcome.winner)}</b> by{" "}
           <b>
             {market.oracle === "Reflector"
@@ -149,7 +149,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
       {status === "Cancelled" && (
-        <div className="rounded-lg border border-neutral-700 bg-neutral-900/60 px-4 py-3 text-sm">
+        <div className="rounded-xl border border-line-strong bg-panel-muted px-4 py-3 text-sm">
           Market cancelled — all stakes refundable in full, no fee. Claim from{" "}
           <Link href="/portfolio" className="underline">
             portfolio
@@ -198,7 +198,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
 
           <MarketCharts market={market} />
 
-          <p className="text-xs text-neutral-600">
+          <p className="text-xs leading-relaxed text-ink-subtle">
             Every number on this page is computed in your browser from on-chain pool state
             (polled ~12s). Implied payouts include your stake — piling on a rung prices it
             down. Pick a side and dominance margin in the Trade panel.

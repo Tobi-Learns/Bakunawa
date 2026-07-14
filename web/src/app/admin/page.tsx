@@ -39,20 +39,20 @@ export default function AdminHome() {
           <div className="flex gap-2">
             <Link
               href="/admin/curves"
-              className="rounded border border-neutral-700 px-3 py-1.5 text-sm hover:border-neutral-500"
+              className="inline-flex min-h-11 items-center rounded-md border border-line-strong bg-panel px-3 text-sm text-ink-secondary hover:border-ink-subtle"
             >
               Metadata & curves
             </Link>
             <Link
               href="/admin/events/new"
-              className="rounded bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900"
+              className="inline-flex min-h-11 items-center rounded-md bg-action px-3 text-sm font-semibold text-action-ink hover:bg-action-hover"
             >
               List an event
             </Link>
           </div>
         </div>
         <table className="w-full text-sm">
-          <thead className="text-left text-neutral-500">
+          <thead className="text-left text-ink-muted">
             <tr>
               <th className="py-2 font-normal">Market</th>
               <th className="py-2 font-normal">Oracle</th>
@@ -64,11 +64,11 @@ export default function AdminHome() {
           </thead>
           <tbody>
             {rows.map((m) => (
-              <tr key={m.id} className="border-t border-neutral-900">
+              <tr key={m.id} className="border-t border-line">
                 <td className="py-2.5">
                   <Link href={`/markets/${m.id}`} className="hover:underline">
                     {m.title ?? `${m.sideA} vs ${m.sideB}`}{" "}
-                    <span className="text-neutral-600">#{m.id}</span>
+                    <span className="text-ink-subtle">#{m.id}</span>
                   </Link>
                 </td>
                 <td className="py-2.5">{m.oracle === "Reflector" ? `Reflector · ${m.asset}` : "Admin"}</td>
@@ -80,7 +80,7 @@ export default function AdminHome() {
                 <td className="py-2.5 tabular-nums">
                   {(Number(BigInt(m.pool) / 100000n) / 100).toFixed(2)} USDC
                 </td>
-                <td className="py-2.5 text-neutral-400">
+                <td className="py-2.5 text-ink-muted">
                   {new Date(m.settleTs * 1000).toLocaleString()}
                 </td>
                 <td className="py-2.5 text-right">

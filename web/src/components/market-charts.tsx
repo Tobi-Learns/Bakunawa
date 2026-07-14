@@ -61,16 +61,16 @@ export function MarketCharts({ market }: { market: MarketView }) {
     <section className="flex flex-col gap-6">
       <h2 className="text-lg font-semibold">Charts</h2>
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-neutral-800 p-4">
-          <h3 className="mb-2 text-sm font-medium text-neutral-300">Pool growth</h3>
+        <div className="rounded-xl border border-line bg-panel/80 p-4">
+          <h3 className="mb-2 text-sm font-medium text-ink-secondary">Pool growth</h3>
           {series ? (
             <PoolChart points={series.points} />
           ) : (
             <ChartSkeleton />
           )}
         </div>
-        <div className="rounded-lg border border-neutral-800 p-4">
-          <h3 className="mb-2 text-sm font-medium text-neutral-300">
+        <div className="rounded-xl border border-line bg-panel/80 p-4">
+          <h3 className="mb-2 text-sm font-medium text-ink-secondary">
             Implied payout by rung
           </h3>
           {series ? (
@@ -86,8 +86,8 @@ export function MarketCharts({ market }: { market: MarketView }) {
           )}
         </div>
         {market.oracle === "Reflector" && (
-          <div className="rounded-lg border border-neutral-800 p-4 lg:col-span-2">
-            <h3 className="mb-2 text-sm font-medium text-neutral-300">
+          <div className="rounded-xl border border-line bg-panel/80 p-4 lg:col-span-2">
+            <h3 className="mb-2 text-sm font-medium text-ink-secondary">
               {market.asset} move vs rung thresholds
             </h3>
             {prices ? (

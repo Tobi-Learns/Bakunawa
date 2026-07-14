@@ -90,20 +90,20 @@ function openReturn(
   basis: number | null,
 ): { text: string; cls: string } {
   const r = winPayoutRange(g, pos);
-  if (!r) return { text: "—", cls: "text-neutral-600" };
+  if (!r) return { text: "—", cls: "text-ink-subtle" };
   if (basis && basis > 0) {
     const lo = r.lo / basis - 1;
     const hi = r.hi / basis - 1;
     const same = Math.abs(hi - lo) < 0.005;
     return {
       text: `${same ? fmtRoi(hi) : `${fmtRoi(lo)} – ${fmtRoi(hi)}`} if it wins`,
-      cls: "text-emerald-400",
+      cls: "text-positive",
     };
   }
   const same = Math.abs(r.hi - r.lo) < 1e5;
   return {
     text: `${same ? usd(r.hi) : `${usd(r.lo)} – ${usd(r.hi)}`} if it wins`,
-    cls: "text-neutral-200",
+    cls: "text-ink-secondary",
   };
 }
 
@@ -118,12 +118,12 @@ function outcomeReturn(
   const rs: RungState = outcomeRung(g.ladder, winner, margin, pos, g.market.rakeBps);
   if (rs.state === "won") {
     // ROI needs a basis; convictions have one (stake), Neutral shows payout.
-    if (pos.stake > 0) return { text: `${fmtRoi(rs.roi)} ${suffix}`, cls: "text-emerald-400" };
+    if (pos.stake > 0) return { text: `${fmtRoi(rs.roi)} ${suffix}`, cls: "text-positive" };
     const pay = settlePayout(g.ladder, pos, winner, margin, g.market.rakeBps);
-    return { text: `${usd(pay ?? 0)} ${suffix}`, cls: "text-emerald-400" };
+    return { text: `${usd(pay ?? 0)} ${suffix}`, cls: "text-positive" };
   }
-  if (rs.state === "banked") return { text: "banked into pool", cls: "text-amber-400" };
-  return { text: suffix.includes("now") ? "losing now" : "lost", cls: "text-neutral-500" };
+  if (rs.state === "banked") return { text: "banked into pool", cls: "text-warning" };
+  return { text: suffix.includes("now") ? "losing now" : "lost", cls: "text-ink-muted" };
 }
 
 export default function PortfolioPage() {
@@ -192,9 +192,12 @@ export default function PortfolioPage() {
   }, [addrKey]);
 
   useEffect(() => {
-    refresh();
+    const initial = setTimeout(refresh, 0);
     const t = setInterval(refresh, 15_000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(t);
+    };
   }, [refresh]);
 
   async function run(key: string, build: () => Promise<string>, done: string) {
@@ -215,7 +218,7 @@ export default function PortfolioPage() {
 
   if (addresses.length === 0)
     return (
-      <p className="py-16 text-center text-sm text-neutral-400">
+      <p className="py-16 text-center text-sm text-ink-muted">
         <Link href="/connect" className="underline">
           Connect a wallet
         </Link>{" "}
@@ -237,7 +240,7 @@ export default function PortfolioPage() {
     <div className="flex flex-col gap-5">
       <h1 className="text-2xl font-semibold">Portfolio</h1>
       {notice && (
-        <p className={`text-sm ${notice.ok ? "text-emerald-400" : "text-red-400"}`}>
+        <p className={`text-sm ${notice.ok ? "text-positive" : "text-danger"}`}>
           {notice.text}
           {notice.hash && (
             <>
@@ -250,9 +253,9 @@ export default function PortfolioPage() {
         </p>
       )}
       {!loaded ? (
-        <p className="text-sm text-neutral-500">Reading positions from chain…</p>
+        <p className="text-sm text-ink-muted">Reading positions from chain…</p>
       ) : groups.length === 0 ? (
-        <p className="text-sm text-neutral-400">
+        <p className="text-sm text-ink-muted">
           No positions yet —{" "}
           <Link href="/markets" className="underline">
             browse markets
@@ -333,7 +336,7 @@ export default function PortfolioPage() {
           const returnCell = (row: Row) => {
             const pos = { side: row.side, rung: row.rung, shares: num(row.shares), stake: row.stake };
             if (g.status === "Cancelled")
-              return { text: "refund available", cls: "text-amber-300" };
+              return { text: "refund available", cls: "text-warning" };
             if (g.status === "Settled" && g.outcome)
               return outcomeReturn(g, pos, g.outcome.winner, g.outcome.margin, "settled");
             if ((g.status === "Locked" || g.status === "Settling") && g.move?.winningSide != null)
@@ -342,14 +345,14 @@ export default function PortfolioPage() {
           };
 
           return (
-            <div key={String(g.market.id)} className="rounded-lg border border-neutral-800">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-4 py-2.5">
+            <div key={String(g.market.id)} className="overflow-hidden rounded-xl border border-line bg-panel/80">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
                 <div className="flex items-center gap-3">
                   <Link href={`/markets/${g.market.id}`} className="font-medium underline-offset-2 hover:underline">
                     {g.market.oracle === "Reflector"
                       ? `${g.market.asset} ${g.market.sideA}/${g.market.sideB}`
                       : `${g.market.sideA} vs ${g.market.sideB}`}{" "}
-                    <span className="text-neutral-500">#{String(g.market.id)}</span>
+                    <span className="text-ink-muted">#{String(g.market.id)}</span>
                   </Link>
                   <StatusPill status={g.status} />
                 </div>
@@ -359,7 +362,7 @@ export default function PortfolioPage() {
                       run(`claim-${id}`, () => buildClaimXdr(address, BigInt(id)), `Claimed convictions on #${id}`)
                     }
                     disabled={busy !== null}
-                    className="rounded bg-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-950 hover:bg-emerald-200 disabled:opacity-50"
+                    className="min-h-11 rounded-md bg-positive px-3 text-sm font-semibold text-action-ink hover:brightness-110 disabled:opacity-50"
                   >
                     {busy === `claim-${id}` ? "Claiming…" : "Claim convictions"}
                   </button>
@@ -367,7 +370,7 @@ export default function PortfolioPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-neutral-500">
+                  <thead className="text-left text-xs text-ink-muted">
                     <tr>
                       <th className="px-4 py-2 font-normal">{sideName(0)} / {sideName(1)} · margin</th>
                       <th className="px-4 py-2 font-normal">Shares</th>
@@ -388,17 +391,17 @@ export default function PortfolioPage() {
                         ((g.status === "Settled" && g.outcome?.winner === row.side) ||
                           g.status === "Cancelled");
                       return (
-                        <tr key={row.key} className="border-t border-neutral-900">
+                        <tr key={row.key} className="border-t border-line">
                           <td className="px-4 py-2.5">
-                            <span className="text-neutral-300">{sideName(row.side)}</span>{" "}
-                            <span className="text-neutral-500">·</span>{" "}
+                            <span className="text-ink-secondary">{sideName(row.side)}</span>{" "}
+                            <span className="text-ink-muted">·</span>{" "}
                             {marginLabel(g.market, row.rung)}
                             {multiWallet && (
                               <span
                                 className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] ${
                                   row.owner === address
-                                    ? "border-emerald-700 text-emerald-400"
-                                    : "border-neutral-800 text-neutral-500"
+                                    ? "border-positive/50 text-positive"
+                                    : "border-line text-ink-muted"
                                 }`}
                                 title={row.owner}
                               >
@@ -407,12 +410,12 @@ export default function PortfolioPage() {
                             )}
                           </td>
                           <td className="px-4 py-2.5 tabular-nums">{formatUsdc(row.shares)}</td>
-                          <td className="px-4 py-2.5 tabular-nums text-neutral-400">{row.boughtAt}</td>
-                          <td className="px-4 py-2.5 tabular-nums text-neutral-400">
+                          <td className="px-4 py-2.5 tabular-nums text-ink-muted">{row.boughtAt}</td>
+                          <td className="px-4 py-2.5 tabular-nums text-ink-muted">
                             {row.cost != null ? `$${(row.cost / 1e7).toFixed(2)}` : "—"}
                           </td>
                           <td className={`px-4 py-2.5 ${ret.cls}`}>{ret.text}</td>
-                          <td className="px-4 py-2.5 tabular-nums text-neutral-400">
+                          <td className="px-4 py-2.5 tabular-nums text-ink-muted">
                             {deeperPool(g, row.side, row.rung) > 0n
                               ? `$${formatUsdc(deeperPool(g, row.side, row.rung))}`
                               : "—"}
@@ -428,7 +431,7 @@ export default function PortfolioPage() {
                                   )
                                 }
                                 disabled={busy !== null}
-                                className="rounded bg-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-950 disabled:opacity-50"
+                                className="min-h-11 rounded-md bg-positive px-3 text-xs font-semibold text-action-ink disabled:opacity-50"
                               >
                                 {busy === `redeem-${id}-${row.side}` ? "Redeeming…" : "Redeem"}
                               </button>
@@ -444,7 +447,7 @@ export default function PortfolioPage() {
           );
         })
       )}
-      <p className="text-xs text-neutral-600">
+      <p className="text-xs leading-relaxed text-ink-subtle">
         States refresh from chain every 15s. Every holding is share-denominated;
         price/share is the crowd probability ($0.01–$0.99). Open positions show a
         min–max range because the payout depends on the final margin — deeper

@@ -31,6 +31,8 @@ model Market {
   ticketB     String? // v4: side-1 ticket SAC
   status      String // on-chain: Open | Settled | Cancelled
   pool        BigInt   @default(0) // cached total staked (stroops)
+  sidePoolA   BigInt   @default(0) // cached side-0 money total from authoritative ladder reread
+  sidePoolB   BigInt   @default(0) // cached side-1 money total from authoritative ladder reread
   // outcome cache (Settled only)
   winner      Int?
   margin      Int?

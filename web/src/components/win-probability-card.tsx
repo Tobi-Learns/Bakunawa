@@ -61,6 +61,7 @@ export function WinProbabilityCard({
     // skip if the cache is already current (nothing new to show)
     if (last && live.every((w) => w.p === last.win.find((x) => x.side === w.side)?.p))
       return base;
+    // eslint-disable-next-line react-hooks/purity -- this is the deliberately live chart endpoint
     const nowSec = Math.floor(Date.now() / 1000);
     const t = last ? Math.min(nowSec, last.t + LIVE_TAIL_CAP) : nowSec;
     return [...base, { t, pool: "0", quotes: [], win: live }];
@@ -70,10 +71,10 @@ export function WinProbabilityCard({
   if (hidden || (data && points.length === 0)) return null;
 
   return (
-    <section className="rounded-lg border border-neutral-800 p-4">
-      <h2 className="mb-2 text-sm font-medium text-neutral-300">
+    <section className="rounded-xl border border-line bg-panel/80 p-4">
+      <h2 className="mb-2 text-sm font-medium text-ink-secondary">
         Win probability{" "}
-        <span className="font-normal text-neutral-600">· crowd forecast over time</span>
+        <span className="font-normal text-ink-subtle">· crowd forecast over time</span>
       </h2>
       {data ? (
         <WinProbabilityChart points={points} sideA={data.sideA} sideB={data.sideB} />

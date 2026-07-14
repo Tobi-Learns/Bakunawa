@@ -13,9 +13,9 @@ export function uiStatus(m: MarketView, nowSec = Date.now() / 1000): UiStatus {
 }
 
 export const STATUS_STYLE: Record<UiStatus, string> = {
-  Open: "border-emerald-800 bg-emerald-950/50 text-emerald-300",
-  Locked: "border-violet-800 bg-violet-950/50 text-violet-300",
-  Settling: "border-amber-800 bg-amber-950/50 text-amber-300",
-  Settled: "border-sky-800 bg-sky-950/50 text-sky-300",
-  Cancelled: "border-neutral-700 bg-neutral-900 text-neutral-400",
+  Open: "border-positive/40 bg-positive/10 text-positive",
+  Locked: "border-action/40 bg-action/10 text-action-hover",
+  Settling: "border-warning/40 bg-warning/10 text-warning",
+  Settled: "border-info/40 bg-info/10 text-info",
+  Cancelled: "border-line-strong bg-panel-muted text-ink-muted",
 };

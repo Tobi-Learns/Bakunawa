@@ -78,13 +78,13 @@ export default function CurvesPage() {
                   onClick={() => pick(r)}
                   className={`w-full rounded border px-3 py-2 text-left text-sm ${
                     sel?.id === r.id
-                      ? "border-neutral-300"
-                      : "border-neutral-800 hover:border-neutral-600"
+                      ? "border-action bg-action/8"
+                      : "border-line hover:border-line-strong"
                   }`}
                 >
                   {r.title ?? `${r.sideA} vs ${r.sideB}`}{" "}
-                  <span className="text-neutral-600">#{r.id}</span>
-                  {r.curve != null && <span className="ml-2 text-xs text-sky-400">curve ✓</span>}
+                  <span className="text-ink-subtle">#{r.id}</span>
+                  {r.curve != null && <span className="ml-2 text-xs text-info">curve ✓</span>}
                 </button>
               </li>
             ))}
@@ -94,36 +94,36 @@ export default function CurvesPage() {
           <form onSubmit={save} className="flex flex-col gap-3">
             <h2 className="font-semibold">#{sel.id}</h2>
             <input
-              className="rounded border border-neutral-700 bg-transparent px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-line-strong bg-panel px-3 text-sm text-ink"
               placeholder="Title"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             />
             <textarea
-              className="rounded border border-neutral-700 bg-transparent px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-line-strong bg-panel px-3 text-sm text-ink"
               placeholder="Description / settlement terms"
               rows={3}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             />
             <input
-              className="rounded border border-neutral-700 bg-transparent px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-line-strong bg-panel px-3 text-sm text-ink"
               placeholder="Category (crypto / nba / …)"
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
             />
             <textarea
-              className="rounded border border-neutral-700 bg-transparent px-3 py-2 font-mono text-xs"
+              className="min-h-11 rounded-md border border-line-strong bg-panel px-3 font-mono text-xs text-ink"
               placeholder='Display curve JSON: [{"side":0,"rung":5,"mult":1.67}, …] — empty to clear'
               rows={10}
               value={form.curve}
               onChange={(e) => setForm((f) => ({ ...f, curve: e.target.value }))}
             />
-            <button className="rounded bg-neutral-100 py-2 text-sm font-medium text-neutral-900">
+            <button className="min-h-11 rounded-md bg-action text-sm font-semibold text-action-ink hover:bg-action-hover">
               Save metadata
             </button>
             {msg && (
-              <p className={`text-sm ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>
+              <p className={`text-sm ${msg.ok ? "text-positive" : "text-danger"}`}>
                 {msg.text}
               </p>
             )}

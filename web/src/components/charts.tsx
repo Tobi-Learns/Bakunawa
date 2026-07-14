@@ -140,11 +140,11 @@ function Tooltip({ x, lines }: { x: number; lines: string[] }) {
   const right = x > W * 0.6 ? `${100 - (x / W) * 100}%` : undefined;
   return (
     <div
-      className="pointer-events-none absolute top-1 z-10 rounded border border-neutral-700 bg-neutral-900/95 px-2.5 py-1.5 text-xs text-neutral-200"
+      className="pointer-events-none absolute top-1 z-10 rounded-md border border-line-strong bg-panel/95 px-2.5 py-1.5 text-xs text-ink-secondary shadow-lg"
       style={{ left, right }}
     >
       {lines.map((l, i) => (
-        <div key={i} className={i === 0 ? "text-neutral-400" : ""}>
+        <div key={i} className={i === 0 ? "text-ink-muted" : ""}>
           {l}
         </div>
       ))}
@@ -154,14 +154,14 @@ function Tooltip({ x, lines }: { x: number; lines: string[] }) {
 
 function DataTable({ head, rows }: { head: string[]; rows: string[][] }) {
   return (
-    <details className="mt-1 text-xs text-neutral-500">
+    <details className="mt-1 text-xs text-ink-muted">
       <summary className="cursor-pointer">Data table</summary>
       <div className="max-h-48 overflow-y-auto">
         <table className="mt-1 w-full">
           <thead>
             <tr>
               {head.map((h) => (
-                <th key={h} className="py-1 pr-3 text-left font-normal text-neutral-400">
+                <th key={h} className="py-1 pr-3 text-left font-normal text-ink-muted">
                   {h}
                 </th>
               ))}
@@ -169,7 +169,7 @@ function DataTable({ head, rows }: { head: string[]; rows: string[][] }) {
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className="border-t border-neutral-900">
+              <tr key={i} className="border-t border-line">
                 {r.map((c, j) => (
                   <td key={j} className="py-0.5 pr-3 tabular-nums">
                     {c}
@@ -195,7 +195,7 @@ export function PoolChart({ points }: { points: { t: number; pool: string }[] })
   );
   const { idx, ref, onMove, onLeave } = useCrosshair(data.map((d) => d.t), scale);
   if (!scale || data.length === 0)
-    return <p className="text-xs text-neutral-600">No entries yet — the pool chart starts with the first prediction.</p>;
+    return <p className="text-xs text-ink-subtle">No entries yet — the pool chart starts with the first prediction.</p>;
   const path = stepPath(data, scale);
   const areaPath = `${path} V ${scale.y(Math.max(0, scale.v0))} H ${scale.x(data[0].t)} Z`;
   return (
@@ -271,7 +271,7 @@ export function WinProbabilityChart({
 
   if (!scale || points.length === 0)
     return (
-      <p className="text-xs text-neutral-600">
+      <p className="text-xs text-ink-subtle">
         No predictions yet — the forecast starts with the first entry.
       </p>
     );
@@ -283,7 +283,7 @@ export function WinProbabilityChart({
         {series.map((s) => (
           <span key={s.side} className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} />
-            <span className="text-neutral-300">{s.name}</span>
+            <span className="text-ink-secondary">{s.name}</span>
             <span className="font-semibold tabular-nums">{s.pts[lead].v.toFixed(0)}%</span>
           </span>
         ))}
@@ -373,7 +373,7 @@ export function RungHistoryChart({
   const { idx, ref, onMove, onLeave } = useCrosshair(points.map((p) => p.t), scale);
 
   if (!scale || points.length === 0)
-    return <p className="text-xs text-neutral-600">No entries yet — rung prices appear with the first prediction.</p>;
+    return <p className="text-xs text-ink-subtle">No entries yet — rung prices appear with the first prediction.</p>;
 
   return (
     <div className="relative">
@@ -383,8 +383,8 @@ export function RungHistoryChart({
             <button
               key={s}
               onClick={() => setSide(s)}
-              className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                side === s ? "border-neutral-300 text-neutral-100" : "border-neutral-800 text-neutral-500"
+              className={`inline-flex min-h-11 items-center rounded-full border px-3 text-xs ${
+                side === s ? "border-action text-action-hover" : "border-line text-ink-muted"
               }`}
             >
               {s === 0 ? sideA : sideB}
@@ -392,7 +392,7 @@ export function RungHistoryChart({
           ))}
         </div>
         {/* legend — identity never rides on color alone (labels also at line ends) */}
-        <div className="flex flex-wrap gap-2.5 text-[10px] text-neutral-400">
+        <div className="flex flex-wrap gap-2.5 text-[10px] text-ink-muted">
           {series.map((s) => (
             <span key={s.rung} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: s.color }} />
@@ -475,7 +475,7 @@ export function PriceChart({
 
   if (!scale || data.length === 0)
     return (
-      <p className="text-xs text-neutral-600">
+      <p className="text-xs text-ink-subtle">
         No price samples in the window yet — they accumulate as the indexer runs.
       </p>
     );

@@ -26,6 +26,7 @@ import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
 import { sharePrice, sharesForDollars } from "@/lib/dpm";
 import { quoteBuy } from "@/lib/parimutuel";
 import { recordNeutralEntry, recordPositionMeta } from "@/lib/positions-meta";
+import { ui } from "@/lib/ui";
 import { useWallet } from "@/lib/wallet-context";
 import { HonestyTip } from "./honesty-tip";
 
@@ -90,21 +91,24 @@ export function PredictionSlip({
   }, [code]);
   useEffect(() => {
     if (!selling) return;
-    loadBook();
+    const initial = setTimeout(loadBook, 0);
     const t = setInterval(loadBook, 15_000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(t);
+    };
   }, [selling, loadBook]);
 
 
   // --- Buy: amount is USDC (what mint_tickets takes) ---
-  const stake = useMemo(() => {
+  const stake = (() => {
     if (selling) return 0n;
     try {
       return parseUsdc(amountText || "0");
     } catch {
       return 0n;
     }
-  }, [selling, amountText]);
+  })();
 
   // Neutral buy: shares received + average price/share (D2 dynamic pricing)
   const neutralQuote = useMemo(() => {
@@ -204,6 +208,7 @@ export function PredictionSlip({
           stake: stake.toString(),
           entryRoi,
           txHash,
+          // eslint-disable-next-line react-hooks/purity -- transaction completion timestamp is event data
           at: Date.now(),
         });
       } else if (neutralQuote) {
@@ -214,6 +219,7 @@ export function PredictionSlip({
           side: selected.side,
           dollars: stake.toString(),
           shares: BigInt(Math.round(neutralQuote.shares * 1e7)).toString(),
+          // eslint-disable-next-line react-hooks/purity -- transaction completion timestamp is event data
           at: Date.now(),
         });
       }
@@ -276,17 +282,17 @@ export function PredictionSlip({
         : " ";
 
   return (
-    <div className="rounded-lg border border-neutral-800 p-4">
+    <div className="rounded-xl border border-line bg-panel/90 p-4 shadow-lg shadow-black/20">
       {/* Title — market + selected outcome */}
       <div className="mb-4">
-        <div className="text-sm text-neutral-500">
+        <div className="text-sm text-ink-muted">
           {market.oracle === "Reflector"
             ? `${market.asset} · ${sideName(0)} vs ${sideName(1)}`
             : `${sideName(0)} vs ${sideName(1)}`}
         </div>
         <div className="text-xl font-semibold">
           {sideName(selected.side)}
-          <span className="font-normal text-neutral-500">
+          <span className="font-normal text-ink-muted">
             {" "}
             · {selling ? "Sell" : selected.rung === 0 ? "Neutral" : rungLabel(selected.rung)}
           </span>
@@ -294,16 +300,16 @@ export function PredictionSlip({
       </div>
 
       {/* Buy / Sell tabs */}
-      <div className="mb-5 flex items-center justify-between border-b border-neutral-800">
+      <div className="mb-5 flex items-center justify-between border-b border-line">
         <div className="flex gap-4">
           {(["buy", "sell"] as const).map((t) => (
             <button
               key={t}
               onClick={() => pickTab(t)}
-              className={`-mb-px border-b-2 pb-2 text-sm font-medium capitalize ${
+              className={`-mb-px inline-flex min-h-11 items-center border-b-2 text-sm font-medium capitalize ${
                 tab === t
-                  ? "border-neutral-100 text-neutral-100"
-                  : "border-transparent text-neutral-500 hover:text-neutral-300"
+                  ? "border-action text-action-hover"
+                  : "border-transparent text-ink-muted hover:text-ink"
               }`}
             >
               {t}
@@ -321,10 +327,10 @@ export function PredictionSlip({
           <button
             key={side}
             onClick={() => onSelect(side, selling ? 0 : selected.rung)}
-            className={`flex items-center justify-center gap-1.5 rounded-md py-2.5 text-sm font-semibold ${
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-semibold ${
               selected.side === side
-                ? "bg-emerald-600 text-white"
-                : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                ? "bg-action text-action-ink"
+                : "border border-line bg-panel-muted text-ink-secondary hover:border-line-strong hover:bg-panel-raised"
             }`}
           >
             {sideName(side)}
@@ -336,8 +342,8 @@ export function PredictionSlip({
       {/* Dominance margin slider — our extra; disabled when selling */}
       <div className={`mb-6 ${selling ? "opacity-40" : ""}`}>
         <div className="mb-1 flex items-center justify-between text-xs">
-          <span className="text-neutral-500">Dominance margin</span>
-          <span className="font-medium text-neutral-300">
+          <span className="text-ink-muted">Dominance margin</span>
+          <span className="font-medium text-ink-secondary">
             {selling ? "None (neutral)" : rungLabel(selected.rung)}
           </span>
         </div>
@@ -349,16 +355,16 @@ export function PredictionSlip({
           value={selling ? 0 : rungIndex}
           disabled={selling}
           onChange={(e) => onSelect(selected.side, rungSteps[Number(e.target.value)])}
-          className="w-full accent-neutral-200 disabled:cursor-not-allowed"
+          className="h-11 w-full accent-action disabled:cursor-not-allowed"
         />
       </div>
 
       {/* Amount */}
       <div className="flex items-center justify-between">
-        <span className="text-neutral-400">Amount</span>
+        <span className="text-ink-muted">Amount</span>
         <div className="flex items-baseline">
           {!selling && (
-            <span className={`text-5xl ${amountText ? "text-neutral-400" : "text-neutral-600"}`}>$</span>
+            <span className={`text-5xl ${amountText ? "text-ink-muted" : "text-ink-subtle"}`}>$</span>
           )}
           <input
             value={amountText}
@@ -366,9 +372,9 @@ export function PredictionSlip({
             inputMode="decimal"
             placeholder="0"
             size={Math.max(amountText.length, 1)}
-            className="min-w-[1ch] bg-transparent text-5xl tabular-nums outline-none placeholder:text-neutral-600 [field-sizing:content]"
+            className="min-w-[1ch] bg-transparent text-5xl tabular-nums text-ink outline-none placeholder:text-ink-subtle [field-sizing:content]"
           />
-          {selling && <span className="ml-1 text-base text-neutral-500">sh</span>}
+          {selling && <span className="ml-1 text-base text-ink-muted">sh</span>}
         </div>
       </div>
       <div className="mb-6 mt-3 flex justify-end gap-2">
@@ -376,7 +382,7 @@ export function PredictionSlip({
           <button
             key={v}
             onClick={() => addQuick(v)}
-            className="rounded border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500"
+            className="inline-flex min-h-11 items-center rounded-md border border-line-strong px-3 text-xs text-ink-secondary hover:border-ink-subtle hover:text-ink"
           >
             {selling ? `+${v}` : `+$${v}`}
           </button>
@@ -385,11 +391,11 @@ export function PredictionSlip({
 
       {/* To win / Proceeds — only once there's an amount */}
       {amt > 0 && (
-        <div className="flex items-start justify-between gap-3 border-t border-neutral-800 pt-5">
+        <div className="flex items-start justify-between gap-3 border-t border-line pt-5">
           {/* label column */}
           <div className="min-w-0">
-            <div className="text-neutral-300">{selling ? "Proceeds" : "To win 💵"}</div>
-            <div className="flex items-center gap-1 text-xs text-neutral-500">
+            <div className="text-ink-secondary">{selling ? "Proceeds" : "To win 💵"}</div>
+            <div className="flex items-center gap-1 text-xs text-ink-muted">
               {winSub}
               <InfoDot
                 text={
@@ -404,16 +410,16 @@ export function PredictionSlip({
           {!selling && toWin && Math.abs(toWin.hi - toWin.lo) >= 0.01 ? (
             <div className="shrink-0 space-y-1">
               <div className="flex items-baseline justify-end gap-1.5">
-                <span className="text-xs text-neutral-500">Min</span>
-                <span className="text-4xl tabular-nums text-emerald-400">${toWin.lo.toFixed(2)}</span>
+                <span className="text-xs text-ink-muted">Min</span>
+                <span className="text-4xl tabular-nums text-positive">${toWin.lo.toFixed(2)}</span>
               </div>
               <div className="flex items-baseline justify-end gap-1.5">
-                <span className="text-xs text-neutral-500">Max</span>
-                <span className="text-4xl tabular-nums text-emerald-400">${toWin.hi.toFixed(2)}</span>
+                <span className="text-xs text-ink-muted">Max</span>
+                <span className="text-4xl tabular-nums text-positive">${toWin.hi.toFixed(2)}</span>
               </div>
             </div>
           ) : (
-            <div className="shrink-0 text-4xl tabular-nums text-emerald-400">{winValue}</div>
+            <div className="shrink-0 text-4xl tabular-nums text-positive">{winValue}</div>
           )}
         </div>
       )}
@@ -421,7 +427,7 @@ export function PredictionSlip({
       <button
         onClick={submit}
         disabled={busy || !canSubmit}
-        className="mt-5 w-full rounded-md bg-blue-600 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+        className={`${ui.buttonPrimary} mt-5 w-full`}
       >
         {!address
           ? "Connect wallet to trade"
@@ -437,7 +443,7 @@ export function PredictionSlip({
       </button>
 
       {phase.step === "done" && (
-        <p className="mt-3 text-sm text-emerald-400">
+        <p className="mt-3 text-sm text-positive">
           {phase.kind === "prediction"
             ? "Shares minted"
             : phase.kind === "conviction"
@@ -453,7 +459,7 @@ export function PredictionSlip({
           </Link>
         </p>
       )}
-      {phase.step === "error" && <p className="mt-3 text-sm text-red-400">{phase.message}</p>}
+      {phase.step === "error" && <p className="mt-3 text-sm text-danger">{phase.message}</p>}
     </div>
   );
 }
@@ -461,7 +467,7 @@ export function PredictionSlip({
 /** Tiny hover-tooltip dot — carries the honest-bracket / fill detail. */
 function InfoDot({ text }: { text: string }) {
   return (
-    <span title={text} className="cursor-help select-none text-neutral-600">
+    <span title={text} className="cursor-help select-none text-ink-subtle">
       ⓘ
     </span>
   );

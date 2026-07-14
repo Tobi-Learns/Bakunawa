@@ -13,8 +13,8 @@ import { parseUsdc } from "@/lib/config";
 import { snowflakeU64 } from "@/lib/ids";
 import { useWallet } from "@/lib/wallet-context";
 
-const label = "mb-1 block text-sm text-neutral-400";
-const input = "w-full rounded border border-neutral-700 bg-transparent px-3 py-2 text-sm";
+const label = "mb-1 block text-sm text-ink-muted";
+const input = "min-h-11 w-full rounded-md border border-line-strong bg-panel px-3 text-sm text-ink";
 
 export default function NewEventPage() {
   const { address, signTransaction } = useWallet();
@@ -99,7 +99,7 @@ export default function NewEventPage() {
     <AdminGate>
       <div className="mx-auto max-w-xl">
         <h1 className="mb-1 text-2xl font-semibold">List an event</h1>
-        <p className="mb-6 text-sm text-neutral-400">
+        <p className="mb-6 text-sm leading-relaxed text-ink-muted">
           Settlement terms are printed from these fields on the market page. Crypto
           markets snapshot their baseline from Reflector at listing and settle
           trustlessly; Admin-oracle markets are settled by you from the named official
@@ -196,7 +196,7 @@ export default function NewEventPage() {
               <input className={input} value={form.ticketB} onChange={(e) => set("ticketB", e.target.value)} placeholder="C…" required />
             </div>
           </div>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-ink-muted">
             v4: share assets must exist and be pre-minted into the contract before
             listing — <code>node scripts/list-market.mjs</code> does the full sequence
             in one command (recommended); this form is the manual path.
@@ -213,13 +213,13 @@ export default function NewEventPage() {
           </div>
           <button
             disabled={state.step === "busy"}
-            className="rounded bg-neutral-100 py-2.5 font-medium text-neutral-900 hover:bg-white disabled:opacity-50"
+            className="min-h-11 rounded-md bg-action font-semibold text-action-ink hover:bg-action-hover disabled:opacity-50"
           >
             {state.step === "busy" ? state.what : "Create market (sign in Freighter)"}
           </button>
         </form>
         {state.step === "done" && (
-          <p className="mt-4 text-sm text-emerald-400">
+          <p className="mt-4 text-sm text-positive">
             Listed market #{state.id} —{" "}
             <a href={explorerTxUrl(state.txHash)} target="_blank" rel="noreferrer" className="underline">
               transaction
@@ -235,7 +235,7 @@ export default function NewEventPage() {
           </p>
         )}
         {state.step === "error" && (
-          <p className="mt-4 text-sm text-red-400">{state.message}</p>
+          <p className="mt-4 text-sm text-danger">{state.message}</p>
         )}
       </div>
     </AdminGate>

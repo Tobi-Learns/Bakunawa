@@ -54,7 +54,7 @@ export default function AdminSettlePage({
   if (!market)
     return (
       <AdminGate>
-        <p className="text-sm text-neutral-500">Reading market #{id} from chain…</p>
+        <p className="text-sm text-ink-muted">Reading market #{id} from chain…</p>
       </AdminGate>
     );
 
@@ -74,7 +74,7 @@ export default function AdminSettlePage({
           </h1>
           <StatusPill status={status} />
         </div>
-        <div className="rounded border border-neutral-800 px-4 py-3 text-sm text-neutral-300">
+        <div className="rounded-xl border border-line bg-panel/80 px-4 py-3 text-sm text-ink-secondary">
           {market.sideA} vs {market.sideB} · pool {formatUsdc(pool)} USDC · oracle{" "}
           {market.oracle}
           {market.oracle === "Reflector" && move && (
@@ -95,7 +95,7 @@ export default function AdminSettlePage({
         </div>
 
         {outcome && (
-          <div className="rounded border border-sky-900 bg-sky-950/40 px-4 py-3 text-sm">
+          <div className="rounded-xl border border-info/35 bg-info/8 px-4 py-3 text-sm">
             Settled: {sideName(outcome.winner)} by {outcome.margin} · losing pool{" "}
             {formatUsdc(outcome.losingPool)} · fee {formatUsdc(outcome.rakeAmount)} USDC
           </div>
@@ -107,14 +107,14 @@ export default function AdminSettlePage({
               <button
                 disabled={busy !== null || status !== "Settling"}
                 onClick={() => run("Oracle settlement", () => buildSettleOracleXdr(address!, BigInt(id)))}
-                className="rounded bg-neutral-100 py-2.5 font-medium text-neutral-900 disabled:opacity-50"
+                className="min-h-11 rounded-md bg-action font-semibold text-action-ink disabled:opacity-50"
                 title={status !== "Settling" ? "Available once settle time passes" : ""}
               >
                 {busy === "Oracle settlement" ? "Settling…" : "Trigger Reflector settlement"}
               </button>
             ) : (
               <form
-                className="flex flex-col gap-3 rounded border border-neutral-800 p-4"
+                className="flex flex-col gap-3 rounded-xl border border-line bg-panel/80 p-4"
                 onSubmit={(e) => {
                   e.preventDefault();
                   run("Admin settlement", () =>
@@ -122,13 +122,13 @@ export default function AdminSettlePage({
                   );
                 }}
               >
-                <p className="text-sm text-neutral-400">
+                <p className="text-sm text-ink-muted">
                   Post the result from the named official source (exact terms on the
                   market page):
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <select
-                    className="rounded border border-neutral-700 bg-transparent px-3 py-2 text-sm"
+                    className="min-h-11 rounded-md border border-line-strong bg-panel px-3 text-sm text-ink"
                     value={winner}
                     onChange={(e) => setWinner(Number(e.target.value))}
                   >
@@ -136,7 +136,7 @@ export default function AdminSettlePage({
                     <option value={1}>{market.sideB} won</option>
                   </select>
                   <input
-                    className="rounded border border-neutral-700 bg-transparent px-3 py-2 text-sm"
+                    className="min-h-11 rounded-md border border-line-strong bg-panel px-3 text-sm text-ink"
                     placeholder="Margin (units)"
                     value={margin}
                     onChange={(e) => setMargin(e.target.value.replace(/\D/g, ""))}
@@ -145,7 +145,7 @@ export default function AdminSettlePage({
                 </div>
                 <button
                   disabled={busy !== null || status !== "Settling"}
-                  className="rounded bg-neutral-100 py-2 text-sm font-medium text-neutral-900 disabled:opacity-50"
+                  className="min-h-11 rounded-md bg-action text-sm font-semibold text-action-ink disabled:opacity-50"
                 >
                   {busy === "Admin settlement" ? "Settling…" : "Post result & settle"}
                 </button>
@@ -154,7 +154,7 @@ export default function AdminSettlePage({
             <button
               disabled={busy !== null}
               onClick={() => run("Cancellation", () => buildCancelMarketXdr(address!, BigInt(id)))}
-              className="rounded border border-red-900 py-2 text-sm text-red-300 hover:border-red-700 disabled:opacity-50"
+              className="min-h-11 rounded-md border border-danger/50 bg-danger/10 text-sm text-danger hover:border-danger disabled:opacity-50"
             >
               {busy === "Cancellation" ? "Cancelling…" : "Cancel market (full refunds, no fee)"}
             </button>
@@ -162,7 +162,7 @@ export default function AdminSettlePage({
         )}
 
         {msg && (
-          <p className={`text-sm ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>
+          <p className={`text-sm ${msg.ok ? "text-positive" : "text-danger"}`}>
             {msg.text}
             {msg.hash && (
               <>

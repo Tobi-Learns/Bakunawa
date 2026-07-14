@@ -65,16 +65,16 @@ export default function PositionPage({
 
   if (!address)
     return (
-      <p className="py-16 text-center text-sm text-neutral-400">
+      <p className="py-16 text-center text-sm text-ink-muted">
         <Link href="/connect" className="underline">
           Connect a wallet
         </Link>{" "}
         to view this position.
       </p>
     );
-  if (error) return <p className="text-sm text-red-400">{error}</p>;
+  if (error) return <p className="text-sm text-danger">{error}</p>;
   if (!market || !position)
-    return <p className="text-sm text-neutral-500">Reading position from chain…</p>;
+    return <p className="text-sm text-ink-muted">Reading position from chain…</p>;
 
   const status = uiStatus(market);
   const meta = findPositionMeta(marketId, position.side, position.rung, position.stake);
@@ -101,8 +101,8 @@ export default function PositionPage({
   );
 
   const row = (label: string, value: React.ReactNode) => (
-    <div className="flex justify-between border-t border-neutral-900 px-4 py-2.5 first:border-t-0">
-      <span className="text-neutral-400">{label}</span>
+    <div className="flex justify-between border-t border-line px-4 py-2.5 first:border-t-0">
+      <span className="text-ink-muted">{label}</span>
       <span className="text-right">{value}</span>
     </div>
   );
@@ -119,7 +119,7 @@ export default function PositionPage({
         <StatusPill status={status} />
       </div>
 
-      <div className="rounded-lg border border-neutral-800 text-sm">
+      <div className="overflow-hidden rounded-xl border border-line bg-panel/80 text-sm">
         {row("Stake", `${formatUsdc(position.stake)} USDC`)}
         {row(
           "Entry",
@@ -137,7 +137,7 @@ export default function PositionPage({
               </a>
             </>
           ) : (
-            <span className="text-neutral-600">placed outside this browser</span>
+            <span className="text-ink-subtle">placed outside this browser</span>
           ),
         )}
         {row("Shares held", formatUsdc(position.shares))}
@@ -147,11 +147,11 @@ export default function PositionPage({
           row(
             "If settled now",
             nowState.state === "won" ? (
-              <span className="text-emerald-400">+{(nowState.roi * 100).toFixed(1)}%</span>
+              <span className="text-positive">+{(nowState.roi * 100).toFixed(1)}%</span>
             ) : nowState.state === "banked" ? (
-              <span className="text-amber-400">banked into pool</span>
+              <span className="text-warning">banked into pool</span>
             ) : (
-              <span className="text-neutral-500">losing</span>
+              <span className="text-ink-muted">losing</span>
             ),
           )}
         {status === "Cancelled" &&
@@ -161,7 +161,7 @@ export default function PositionPage({
           row(
             "Settlement",
             nowState.state === "won" ? (
-              <span className="text-emerald-400">
+              <span className="text-positive">
                 +{(nowState.roi * 100).toFixed(1)}% ={" "}
                 {formatUsdc(
                   position.stake + BigInt(Math.floor(Number(position.stake) * nowState.roi)),
@@ -169,11 +169,11 @@ export default function PositionPage({
                 USDC {position.claimed ? "· claimed" : "· claim in portfolio"}
               </span>
             ) : nowState.state === "banked" ? (
-              <span className="text-amber-400">
+              <span className="text-warning">
                 margin unmet — stake banked into the pool
               </span>
             ) : (
-              <span className="text-neutral-500">wrong side — stake lost</span>
+              <span className="text-ink-muted">wrong side — stake lost</span>
             ),
           )}
         {status === "Settled" &&
@@ -188,7 +188,7 @@ export default function PositionPage({
           )}
       </div>
 
-      <Link href="/portfolio" className="text-sm text-neutral-400 underline">
+      <Link href="/portfolio" className="inline-flex min-h-11 items-center text-sm text-ink-muted underline hover:text-ink">
         ← Back to portfolio
       </Link>
     </div>

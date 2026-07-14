@@ -26,10 +26,10 @@ function rungLabel(market: MarketView, rung: number): string {
 
 function StateCell({ rs }: { rs: RungState }) {
   if (rs.state === "won")
-    return <span className="text-emerald-400">{fmtRoi(rs.roi)}</span>;
+    return <span className="text-positive">{fmtRoi(rs.roi)}</span>;
   if (rs.state === "banked")
-    return <span className="text-amber-400">banked into pool</span>;
-  return <span className="text-neutral-600">loses</span>;
+    return <span className="text-warning">banked into pool</span>;
+  return <span className="text-ink-subtle">loses</span>;
 }
 
 export function Ladder({
@@ -59,14 +59,14 @@ export function Ladder({
 
   const thirdColumn = (rung: number, stake: bigint) => {
     if (status === "Cancelled")
-      return <span className="text-neutral-500">refunded</span>;
+      return <span className="text-ink-muted">refunded</span>;
     if (status === "Settled" && outcome)
       return stake > 0n ? (
         <StateCell
           rs={probeOutcome(ladder, side, rung, outcome.winner, outcome.margin, market.rakeBps)}
         />
       ) : (
-        <span className="text-neutral-700">—</span>
+        <span className="text-ink-subtle">—</span>
       );
     if ((status === "Locked" || status === "Settling") && move && move.winningSide !== null)
       return stake > 0n ? (
@@ -74,28 +74,28 @@ export function Ladder({
           rs={probeOutcome(ladder, side, rung, move.winningSide, move.units, market.rakeBps)}
         />
       ) : (
-        <span className="text-neutral-700">—</span>
+        <span className="text-ink-subtle">—</span>
       );
     // Open (or locked without a live feed): the implied-payout RANGE for a
     // marginal $1 — the return depends on how many same-side convictions land.
     const range = quoteBuy(ladder, side, rung, 10_000_000, market.rungs, market.rakeBps).range;
-    if (range === null) return <span className="text-neutral-700">—</span>;
+    if (range === null) return <span className="text-ink-subtle">—</span>;
     const point = Math.abs(range.max - range.min) < 0.005;
     return (
-      <span className="text-neutral-200 tabular-nums">
+      <span className="text-ink-secondary tabular-nums">
         {point ? fmtRoi(range.max) : `${fmtRoi(range.min)} – ${fmtRoi(range.max)}`}
       </span>
     );
   };
 
   return (
-    <div className="rounded-lg border border-neutral-800">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2.5">
+    <div className="overflow-x-auto rounded-xl border border-line bg-panel/80">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <span className="font-semibold">{sideName}</span>
-        <span className="text-sm text-neutral-400">{formatUsdc(sideTotal)} USDC</span>
+        <span className="text-sm text-ink-muted">{formatUsdc(sideTotal)} USDC</span>
       </div>
-      <table className="w-full text-sm">
-        <thead className="text-left text-xs text-neutral-500">
+      <table className="w-full min-w-[34rem] text-sm">
+        <thead className="text-left text-xs text-ink-muted">
           <tr>
             <th className="px-4 py-2 font-normal">Rung</th>
             <th className="px-4 py-2 font-normal">Staked</th>
@@ -118,9 +118,9 @@ export function Ladder({
               <tr
                 key={rung}
                 onClick={selectable ? () => onSelect(side, rung) : undefined}
-                className={`border-t border-neutral-900 ${
-                  selectable ? "cursor-pointer hover:bg-neutral-900/60" : ""
-                } ${isSelected ? "bg-neutral-900" : ""}`}
+                className={`border-t border-line ${
+                  selectable ? "cursor-pointer hover:bg-panel-raised/70" : ""
+                } ${isSelected ? "bg-action/8" : ""}`}
               >
                 <td className="px-4 py-2.5">{rungLabel(market, rung)}</td>
                 <td className="px-4 py-2.5">
@@ -128,9 +128,9 @@ export function Ladder({
                     <span className="w-20 shrink-0 tabular-nums">
                       ${formatUsdc(stake)}
                     </span>
-                    <span className="h-1.5 flex-1 overflow-hidden rounded bg-neutral-900">
+                    <span className="h-1.5 flex-1 overflow-hidden rounded bg-panel-muted">
                       <span
-                        className="block h-full rounded bg-neutral-600"
+                        className="block h-full rounded bg-ink-subtle"
                         style={{ width: `${pct}%` }}
                       />
                     </span>
