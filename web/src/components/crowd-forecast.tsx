@@ -36,10 +36,10 @@ export function CrowdForecast({
     .sort((x, y) => y.p - x.p)[0];
 
   return (
-    <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+    <section className="rounded-xl border border-line bg-panel/80 p-4">
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-neutral-300">Crowd forecast</h2>
-        <span className="text-xs text-neutral-600">share of the live pool · not fixed odds</span>
+        <h2 className="text-sm font-medium text-ink-secondary">Crowd forecast</h2>
+        <span className="text-xs text-ink-subtle">share of the live pool · not fixed odds</span>
       </div>
 
       {/* Headline sentence */}
@@ -60,13 +60,13 @@ export function CrowdForecast({
       {/* Side-vs-side split bar */}
       <div className="mb-1 flex h-6 overflow-hidden rounded">
         <div
-          className="flex items-center justify-start bg-sky-700 px-2 text-xs font-medium text-white"
+          className="flex items-center justify-start bg-[#3987e5] px-2 text-xs font-medium text-white"
           style={{ width: `${a.pWin * 100}%` }}
         >
           {a.pWin >= 0.12 ? `${sideName(0)} ${(a.pWin * 100).toFixed(0)}%` : ""}
         </div>
         <div
-          className="flex items-center justify-end bg-neutral-700 px-2 text-xs font-medium text-white"
+          className="flex items-center justify-end bg-[#199e70] px-2 text-xs font-medium text-white"
           style={{ width: `${b.pWin * 100}%` }}
         >
           {b.pWin >= 0.12 ? `${sideName(1)} ${(b.pWin * 100).toFixed(0)}%` : ""}
@@ -77,22 +77,22 @@ export function CrowdForecast({
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
         {forecast.sides.map((f) => (
           <div key={f.side}>
-            <div className="mb-1 text-xs font-medium text-neutral-400">
-              {sideName(f.side)} <span className="text-neutral-600">· where its money sits</span>
+            <div className="mb-1 text-xs font-medium text-ink-muted">
+              {sideName(f.side)} <span className="text-ink-subtle">· where its money sits</span>
             </div>
             <ul className="flex flex-col gap-0.5 text-sm">
               {f.breakdown.map((s) => (
                 <li key={s.rung} className="flex items-center gap-2">
-                  <span className="w-24 shrink-0 text-neutral-500">
+                  <span className="w-24 shrink-0 text-ink-muted">
                     {rungLabel(market, s.rung)}
                   </span>
-                  <span className="h-1.5 flex-1 overflow-hidden rounded bg-neutral-800">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded bg-panel-muted">
                     <span
-                      className={`block h-full rounded ${s.rung === 0 ? "bg-neutral-500" : "bg-sky-600"}`}
+                      className={`block h-full rounded ${s.rung === 0 ? "bg-ink-subtle" : "bg-[#3987e5]"}`}
                       style={{ width: `${Math.min(s.p * 100, 100)}%` }}
                     />
                   </span>
-                  <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
+                  <span className="w-10 shrink-0 text-right tabular-nums text-ink-secondary">
                     {(s.p * 100).toFixed(0)}%
                   </span>
                 </li>

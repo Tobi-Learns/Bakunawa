@@ -40,7 +40,8 @@ export function useAccount() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const initial = setTimeout(refresh, 0);
+    return () => clearTimeout(initial);
   }, [refresh]);
 
   return { configured, account, loaded, refresh };

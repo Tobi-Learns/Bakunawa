@@ -21,7 +21,7 @@ export function ChartSkeleton() {
 /** A market-card-shaped placeholder for the browse grid. */
 export function MarketCardSkeleton() {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-panel/80 p-4">
       <div className="flex items-start justify-between gap-2">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-4 w-14 rounded-full" />

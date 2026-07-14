@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS "BakunawaMarket" (
   "ticketB"     TEXT,
   "status"      TEXT NOT NULL,
   "pool"        BIGINT NOT NULL DEFAULT 0,
+  "sidePoolA"   BIGINT NOT NULL DEFAULT 0,
+  "sidePoolB"   BIGINT NOT NULL DEFAULT 0,
   "winner"      INTEGER,
   "margin"      INTEGER,
   "losingPool"  BIGINT,
@@ -39,6 +41,13 @@ CREATE TABLE IF NOT EXISTS "BakunawaMarket" (
 )`);
 await client.query(
   `CREATE INDEX IF NOT EXISTS "BakunawaMarket_status_idx" ON "BakunawaMarket"("status")`,
+);
+// 6c: per-side cache on pre-existing installs (fresh CREATE already includes it)
+await client.query(
+  `ALTER TABLE "BakunawaMarket" ADD COLUMN IF NOT EXISTS "sidePoolA" BIGINT NOT NULL DEFAULT 0`,
+);
+await client.query(
+  `ALTER TABLE "BakunawaMarket" ADD COLUMN IF NOT EXISTS "sidePoolB" BIGINT NOT NULL DEFAULT 0`,
 );
 await client.query(`
 CREATE TABLE IF NOT EXISTS "BakunawaPosition" (

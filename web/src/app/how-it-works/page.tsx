@@ -4,7 +4,7 @@ function Section({ id, title, children }: { id?: string; title: string; children
   return (
     <section id={id} className="flex scroll-mt-20 flex-col gap-3">
       <h2 className="text-lg font-semibold">{title}</h2>
-      <div className="flex flex-col gap-3 text-sm leading-relaxed text-neutral-300">{children}</div>
+      <div className="flex flex-col gap-3 text-sm leading-relaxed text-ink-secondary">{children}</div>
     </section>
   );
 }
@@ -14,7 +14,7 @@ export default function HowItWorksPage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-10">
       <div>
         <h1 className="text-2xl font-semibold">How Bakunawa works</h1>
-        <p className="mt-2 text-sm text-neutral-400">
+        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
           A dominance prediction market: forecast the winner and the margin of victory,
           in one shared pool.
         </p>
@@ -76,7 +76,7 @@ export default function HowItWorksPage() {
           wrong winner, or a winning-side margin that missed — funds them, split by{" "}
           <b>share count</b>:
         </p>
-        <pre className="overflow-x-auto rounded border border-neutral-800 bg-neutral-900 px-4 py-3 text-xs">
+        <pre className="overflow-x-auto rounded-xl border border-line bg-panel px-4 py-3 text-xs">
           per-share payout = money-backing + (LosingPool − Fee) / WinningShares
         </pre>
         <p>
@@ -145,7 +145,7 @@ export default function HowItWorksPage() {
         </p>
       </Section>
 
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm leading-relaxed text-ink-muted">
         Ready to try it?{" "}
         <Link href="/markets" className="underline">
           Browse live markets

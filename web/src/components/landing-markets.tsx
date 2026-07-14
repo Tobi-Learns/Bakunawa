@@ -1,110 +1,95 @@
 "use client";
 
-// Live-markets strip on the landing page: biggest open pools first, then
-// recent settlements — read from the indexer cache with skeletons and an
-// empty state.
-
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Countdown } from "@/components/countdown";
+import { MarketCard, type CatalogMarket } from "@/components/market-card";
 import { MarketCardSkeleton } from "@/components/skeleton";
-import { StatusPill } from "@/components/status-pill";
 import type { MarketView } from "@/lib/bakunawa";
-import { formatUsdc } from "@/lib/config";
 import { uiStatus } from "@/lib/market-status";
+import { ui } from "@/lib/ui";
 
-interface Row {
-  id: string;
-  title?: string;
-  asset?: string;
-  sideA: string;
-  sideB: string;
-  oracle: string;
-  status: string;
-  closeTs: number;
-  settleTs: number;
-  pool: string;
-  winner?: number | null;
-  margin?: number | null;
-}
+type CatalogState =
+  | { kind: "loading" }
+  | { kind: "ready"; rows: CatalogMarket[] }
+  | { kind: "error" };
 
-const rank = (r: Row) => {
-  const s = uiStatus({ status: r.status, closeTs: r.closeTs, settleTs: r.settleTs } as MarketView);
+const rank = (market: CatalogMarket) => {
+  const status = uiStatus({
+    status: market.status,
+    closeTs: market.closeTs,
+    settleTs: market.settleTs,
+  } as MarketView);
   const order: Record<string, number> = { Open: 0, Locked: 1, Settling: 2, Settled: 3, Cancelled: 4 };
-  return order[s] ?? 5;
+  return order[status] ?? 5;
 };
 
 export function LandingMarkets() {
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [state, setState] = useState<CatalogState>({ kind: "loading" });
+
+  async function load() {
+    setState({ kind: "loading" });
+    try {
+      const response = await fetch("/api/markets");
+      if (!response.ok) throw new Error("Catalog request failed");
+      const data = (await response.json()) as { markets?: CatalogMarket[] };
+      setState({ kind: "ready", rows: data.markets ?? [] });
+    } catch {
+      setState({ kind: "error" });
+    }
+  }
 
   useEffect(() => {
-    fetch("/api/markets")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setRows(d.markets ?? []))
-      .catch(() => setRows([]));
+    const controller = new AbortController();
+    fetch("/api/markets", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("Catalog request failed");
+        return response.json() as Promise<{ markets?: CatalogMarket[] }>;
+      })
+      .then((data) => setState({ kind: "ready", rows: data.markets ?? [] }))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setState({ kind: "error" });
+      });
+    return () => controller.abort();
   }, []);
 
-  if (rows === null)
+  if (state.kind === "loading") {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <MarketCardSkeleton key={i} />
-        ))}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading markets">
+        {[0, 1, 2].map((i) => <MarketCardSkeleton key={i} />)}
       </div>
     );
+  }
 
-  if (rows.length === 0)
+  if (state.kind === "error") {
     return (
-      <div className="rounded-lg border border-dashed border-neutral-800 p-8 text-center text-sm text-neutral-500">
-        No markets listed yet. The curator opens events from{" "}
-        <Link href="/admin" className="underline">
-          the admin console
+      <div className={`${ui.card} flex flex-col items-center gap-3 border-danger/35 p-8 text-center`}>
+        <p className="text-sm text-ink-secondary">Market forecasts could not be loaded.</p>
+        <button type="button" onClick={() => void load()} className={`${ui.buttonSecondary} text-sm`}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (state.rows.length === 0) {
+    return (
+      <div className={`${ui.card} border-dashed p-8 text-center text-sm text-ink-muted`}>
+        <p>New forecasts are being prepared.</p>
+        <Link href="/how-it-works" className="mt-3 inline-flex min-h-11 items-center text-action hover:text-action-hover">
+          See how Bakunawa works →
         </Link>
-        .
       </div>
     );
+  }
 
-  const sorted = [...rows]
+  const sorted = [...state.rows]
     .sort((a, b) => rank(a) - rank(b) || Number(BigInt(b.pool) - BigInt(a.pool)))
     .slice(0, 6);
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {sorted.map((m) => {
-        const s = uiStatus({ status: m.status, closeTs: m.closeTs, settleTs: m.settleTs } as MarketView);
-        const name = m.title ?? (m.oracle === "Reflector" ? `${m.asset} ${m.sideA}/${m.sideB}` : `${m.sideA} vs ${m.sideB}`);
-        return (
-          <Link
-            key={m.id}
-            href={`/markets/${m.id}`}
-            className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-4 transition hover:border-neutral-600"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span className="font-semibold">{name}</span>
-              <StatusPill status={s} />
-            </div>
-            <div className="mt-auto flex items-end justify-between text-sm">
-              <div>
-                <div className="text-xs text-neutral-500">Pool</div>
-                <div className="text-lg font-semibold">
-                  {formatUsdc(BigInt(m.pool))} <span className="text-xs font-normal">USDC</span>
-                </div>
-              </div>
-              <div className="text-right text-xs text-neutral-400">
-                {s === "Open" ? (
-                  <>locks in <Countdown to={m.closeTs} /></>
-                ) : s === "Locked" ? (
-                  <>settles in <Countdown to={m.settleTs} /></>
-                ) : s === "Settled" && m.winner != null ? (
-                  `${m.winner === 0 ? m.sideA : m.sideB} won`
-                ) : (
-                  s
-                )}
-              </div>
-            </div>
-          </Link>
-        );
-      })}
+      {sorted.map((market) => <MarketCard key={market.id} market={market} />)}
     </div>
   );
 }

@@ -1,28 +1,88 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  /* Bakunawa brand: blood moon, night sky, and serpent-teal. */
+  color-scheme: dark;
+
+  /* Product surfaces */
+  --ui-canvas: #070a0f;
+  --ui-panel: #0d121b;
+  --ui-panel-raised: #121a25;
+  --ui-panel-muted: #182231;
+  --ui-line: #2a3748;
+  --ui-line-strong: #405168;
+
+  /* Content hierarchy */
+  --ui-ink: #f4f7fb;
+  --ui-ink-secondary: #cbd5e1;
+  --ui-ink-muted: #9aa8ba;
+  --ui-ink-subtle: #7f8ea3;
+
+  /* Action and feedback */
+  --ui-action: #2dd4bf;
+  --ui-action-hover: #5eead4;
+  --ui-action-ink: #042f2e;
+  --ui-focus: #38bdf8;
+  --ui-positive: #6ee7b7;
+  --ui-warning: #fcd34d;
+  --ui-danger: #fb7185;
+  --ui-info: #7dd3fc;
+
+  /* Bakunawa brand accents. Chart series keep their validated local palettes. */
   --baku-moon: #ef4444;
   --baku-night: #0c1020;
-  --baku-serpent: #2dd4bf;
+  --baku-serpent: var(--ui-action);
   --baku-serpent-deep: #0f766e;
-  --baku-glow: #38bdf8;
+  --baku-glow: var(--ui-focus);
+
+  /* Backwards-compatible aliases while the refresh rolls through every route. */
+  --background: var(--ui-canvas);
+  --foreground: var(--ui-ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-canvas: var(--ui-canvas);
+  --color-panel: var(--ui-panel);
+  --color-panel-raised: var(--ui-panel-raised);
+  --color-panel-muted: var(--ui-panel-muted);
+  --color-line: var(--ui-line);
+  --color-line-strong: var(--ui-line-strong);
+  --color-ink: var(--ui-ink);
+  --color-ink-secondary: var(--ui-ink-secondary);
+  --color-ink-muted: var(--ui-ink-muted);
+  --color-ink-subtle: var(--ui-ink-subtle);
+  --color-action: var(--ui-action);
+  --color-action-hover: var(--ui-action-hover);
+  --color-action-ink: var(--ui-action-ink);
+  --color-focus: var(--ui-focus);
+  --color-positive: var(--ui-positive);
+  --color-warning: var(--ui-warning);
+  --color-danger: var(--ui-danger);
+  --color-info: var(--ui-info);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+* { border-color: var(--ui-line); }
+
+html { background: var(--ui-canvas); }
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background:
+    radial-gradient(circle at 50% -12rem, rgba(45, 212, 191, 0.07), transparent 34rem),
+    var(--ui-canvas);
+  color: var(--ui-ink);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+a, button, input, select, textarea, summary { outline: none; }
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  box-shadow: 0 0 0 2px var(--ui-canvas), 0 0 0 4px var(--ui-focus);
+}
+
+::selection { background: rgba(45, 212, 191, 0.3); color: var(--ui-ink); }
 
 .brand-wordmark {
   letter-spacing: 0.08em;
@@ -35,18 +95,8 @@ body {
 }
 
 .hero-logo-fade {
-  -webkit-mask-image: radial-gradient(
-    ellipse 74% 70% at 48% 50%,
-    #000 56%,
-    rgba(0, 0, 0, 0.72) 70%,
-    transparent 100%
-  );
-  mask-image: radial-gradient(
-    ellipse 74% 70% at 48% 50%,
-    #000 56%,
-    rgba(0, 0, 0, 0.72) 70%,
-    transparent 100%
-  );
+  -webkit-mask-image: radial-gradient(ellipse 74% 70% at 48% 50%, #000 56%, rgba(0, 0, 0, 0.72) 70%, transparent 100%);
+  mask-image: radial-gradient(ellipse 74% 70% at 48% 50%, #000 56%, rgba(0, 0, 0, 0.72) 70%, transparent 100%);
 }
 
 /* The moon being swallowed: landing hero flourish. */
@@ -61,8 +111,17 @@ body {
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #171717 25%, #262626 50%, #171717 75%);
+  background: linear-gradient(90deg, var(--ui-panel-raised) 25%, var(--ui-panel-muted) 50%, var(--ui-panel-raised) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
   border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
