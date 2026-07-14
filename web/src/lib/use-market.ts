@@ -6,12 +6,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  getDispute,
   getLadder,
   getMarket,
   getOutcome,
+  getProposal,
+  type DisputeView,
   type LadderRowView,
   type MarketView,
   type OutcomeView,
+  type ProposalView,
 } from "./bakunawa";
 import { getLiveMove, type LiveMove } from "./reflector";
 
@@ -20,6 +24,8 @@ export interface MarketState {
   ladder: LadderRowView[];
   outcome: OutcomeView | null;
   move: LiveMove | null;
+  proposal: ProposalView | null; // Phase 2: posted Admin result + dispute window
+  dispute: DisputeView | null; // Phase 2: the single open dispute, if any
   error: string | null;
   loading: boolean;
 }
@@ -30,6 +36,8 @@ export function useMarket(id: string | number, pollMs = 12_000): MarketState {
     ladder: [],
     outcome: null,
     move: null,
+    proposal: null,
+    dispute: null,
     error: null,
     loading: true,
   });
@@ -41,17 +49,20 @@ export function useMarket(id: string | number, pollMs = 12_000): MarketState {
     async function refresh() {
       try {
         const market = await getMarket(BigInt(id));
-        const [ladder, outcome, move] = await Promise.all([
+        const [ladder, outcome, move, proposal, dispute] = await Promise.all([
           getLadder(BigInt(id)),
           market.status === "Settled" ? getOutcome(BigInt(id)) : Promise.resolve(null),
           market.oracle === "Reflector" && market.status === "Open"
             ? getLiveMove(market.asset, market.baseline).catch(() => null)
             : Promise.resolve(null),
+          market.status === "Proposed" ? getProposal(BigInt(id)) : Promise.resolve(null),
+          market.status === "Proposed" ? getDispute(BigInt(id)) : Promise.resolve(null),
         ]);
         if (!live) return;
-        setState({ market, ladder, outcome, move, error: null, loading: false });
-        // terminal markets never change again — stop polling
-        if (market.status !== "Open" && timer.current) {
+        setState({ market, ladder, outcome, move, proposal, dispute, error: null, loading: false });
+        // Terminal markets never change again — stop polling. "Proposed" is NOT
+        // terminal (the window counts down and disputes can open), so keep polling.
+        if (market.status !== "Open" && market.status !== "Proposed" && timer.current) {
           clearInterval(timer.current);
           timer.current = null;
         }

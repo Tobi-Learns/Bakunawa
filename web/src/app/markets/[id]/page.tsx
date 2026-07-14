@@ -10,6 +10,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { Countdown } from "@/components/countdown";
 import { CrowdForecast } from "@/components/crowd-forecast";
+import { DisputePanel } from "@/components/dispute-panel";
 import { MarketCharts } from "@/components/market-charts";
 import { PredictionSlip } from "@/components/prediction-slip";
 import { WinProbabilityCard } from "@/components/win-probability-card";
@@ -20,13 +21,16 @@ import { formatUsdc } from "@/lib/config";
 import { uiStatus } from "@/lib/market-status";
 import { rememberMarketId } from "@/lib/markets-registry";
 import { bankedAmount } from "@/lib/parimutuel";
+import { settlementSourceFor } from "@/lib/settlement-sources";
 import { useMarket } from "@/lib/use-market";
 
 export default function MarketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { market, ladder, outcome, move, error, loading } = useMarket(id);
+  const { market, ladder, outcome, move, proposal, dispute, error, loading } = useMarket(id);
   const [selected, setSelected] = useState({ side: 0, rung: 0 });
   const [placedAt, setPlacedAt] = useState(0); // bumps to force a poll-refresh feel
+  // Curator metadata (DB) — the category pins the settlement authority (2g).
+  const [meta, setMeta] = useState<{ category?: string; description?: string } | null>(null);
   // re-derive the phase every 30s so countdown expiry flips the UI
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -37,6 +41,13 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     if (market) rememberMarketId(Number(market.id));
   }, [market]);
+
+  useEffect(() => {
+    fetch(`/api/markets/${id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setMeta(d?.market ?? null))
+      .catch(() => {});
+  }, [id]);
 
   if (error && !market)
     return (
@@ -50,6 +61,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
   const status = uiStatus(market);
   const total = ladder.reduce((a, r) => a + r.stake, 0n);
   const sideName = (s: number) => (s === 0 ? market.sideA : market.sideB);
+  const source = settlementSourceFor(meta?.category); // 2g: category-pinned authority
   const liveBanked =
     move && move.winningSide !== null && (status === "Locked" || status === "Settling")
       ? bankedAmount(ladder, move.winningSide, move.units)
@@ -71,7 +83,7 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
             {market.oracle === "Reflector"
               ? `% move from the listing snapshot · settled trustlessly by Reflector`
-              : "curated event · result posted from the named official source"}{" "}
+              : `curated event · result posted from ${source ? source.authority : "the named official source"}`}{" "}
             · demand priced · fee {market.rakeBps / 100}% · <HonestyTip />
           </p>
         </div>
@@ -82,6 +94,18 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
           </div>
         </div>
       </div>
+
+      {/* Settlement authority (2g) — the sole named source, pinned by category */}
+      {(source || meta?.description) && (
+        <div className="rounded-lg border border-line bg-panel/60 px-4 py-2.5 text-xs leading-relaxed text-ink-secondary">
+          <span className="font-medium text-ink">Settlement authority:</span>{" "}
+          {source ? source.authority : "the named official source (see terms)"}
+          {source?.note ? ` — ${source.note}` : ""}
+          {meta?.description ? (
+            <div className="mt-1 text-ink-muted">{meta.description}</div>
+          ) : null}
+        </div>
+      )}
 
       {/* Phase banner */}
       {status === "Open" && (
@@ -132,6 +156,15 @@ export default function MarketPage({ params }: { params: Promise<{ id: string }>
             </p>
           )}
         </div>
+      )}
+      {status === "Proposed" && proposal && (
+        <DisputePanel
+          market={market}
+          proposal={proposal}
+          dispute={dispute}
+          authority={source?.authority ?? null}
+          onDone={() => setPlacedAt(Date.now())}
+        />
       )}
       {status === "Settled" && outcome && (
         <div className="rounded-xl border border-info/35 bg-info/8 px-4 py-3 text-sm">

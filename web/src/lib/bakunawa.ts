@@ -56,7 +56,24 @@ export interface MarketView {
   minPool: bigint;
   ticketA: string; // side-0 ticket SAC (classic asset held in contract custody)
   ticketB: string; // side-1 ticket SAC
-  status: "Open" | "Settled" | "Cancelled";
+  disputeSecs: number; // Admin oracle: dispute-window length (Phase 2; 0 for Reflector)
+  disputeBondBps: number; // Admin oracle: bond = max(FLOOR, bps * pool) (Phase 2)
+  // "Proposed" = Admin result posted, dispute window running (Phase 2, optimistic).
+  status: "Open" | "Proposed" | "Settled" | "Cancelled";
+}
+
+/** A posted-but-not-final Admin result during the dispute window (Phase 2). */
+export interface ProposalView {
+  winner: number;
+  margin: number;
+  deadline: number; // unix seconds — dispute window ends here
+  poolAtPropose: bigint; // pool frozen at propose-time (bond base)
+}
+
+/** The single open dispute against a Proposal, if any (Phase 2). */
+export interface DisputeView {
+  disputer: string;
+  bond: bigint;
 }
 
 export interface OutcomeView {
@@ -117,8 +134,37 @@ export async function getMarket(id: bigint | number): Promise<MarketView> {
     minPool: m.min_pool as bigint,
     ticketA: String(m.ticket_a),
     ticketB: String(m.ticket_b),
+    disputeSecs: Number(m.dispute_secs),
+    disputeBondBps: Number(m.dispute_bond_bps),
     status: enumName(m.status) as MarketView["status"],
   };
+}
+
+/** Posted result + dispute window for an Admin market (Phase 2). Null when no
+ *  result is posted (get_proposal traps NotProposed off the window). */
+export async function getProposal(id: bigint | number): Promise<ProposalView | null> {
+  try {
+    const p = (await readView("get_proposal", u64(id))) as Record<string, unknown>;
+    return {
+      winner: Number(p.winner),
+      margin: Number(p.margin),
+      deadline: Number(p.deadline),
+      poolAtPropose: p.pool_at_propose as bigint,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The single open dispute against a Proposal, if any (Phase 2). Null when
+ *  none is open (get_dispute traps NoDispute). */
+export async function getDispute(id: bigint | number): Promise<DisputeView | null> {
+  try {
+    const d = (await readView("get_dispute", u64(id))) as Record<string, unknown>;
+    return { disputer: String(d.disputer), bond: d.bond as bigint };
+  } catch {
+    return null;
+  }
 }
 
 /** Ticket balance of `holder` for one side of a market (SAC read). */
