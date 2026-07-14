@@ -21,6 +21,8 @@ use soroban_sdk::{
 
 const USDC: i128 = 10_000_000; // 7 decimals
 const TICKET_SUPPLY: i128 = 1_000_000_000 * USDC;
+const DISPUTE_SECS: u64 = 500; // Admin-market dispute window used in tests (Phase 2)
+const DISPUTE_BPS: u32 = 100; // 1% pool-proportional bond (2a default)
 
 // --- Mock Reflector feed ---
 
@@ -94,6 +96,9 @@ fn create_market(s: &Setup, id: u64, rungs: &[u32], oracle: OracleKind, feed: &A
     for r in rungs {
         rung_vec.push_back(*r);
     }
+    // Admin markets run the optimistic oracle (need a positive window); Reflector
+    // markets settle instantly and ignore the dispute fields.
+    let dispute_secs = if oracle == OracleKind::Admin { DISPUTE_SECS } else { 0 };
     s.client.create_market(&MarketParams {
         id,
         side_a: symbol_short!("OKC"),
@@ -108,8 +113,21 @@ fn create_market(s: &Setup, id: u64, rungs: &[u32], oracle: OracleKind, feed: &A
         min_pool,
         ticket_a: ticket_a.clone(),
         ticket_b: ticket_b.clone(),
+        dispute_secs,
+        dispute_bond_bps: DISPUTE_BPS,
     });
     (ticket_a, ticket_b)
+}
+
+/// Admin settlement is two-phase now (Phase 2, optimistic oracle): post the
+/// result, let the window elapse undisputed, finalize. The prior tests called
+/// `settle_admin` as one instant step — this helper preserves that shape.
+/// Assumes the ledger is already at/after `settle_ts`.
+fn settle_admin(s: &Setup, id: u64, winner: u32, margin: u32) {
+    s.client.propose_result(&id, &winner, &margin);
+    let secs = s.client.get_market(&id).dispute_secs;
+    s.env.ledger().with_mut(|l| l.timestamp += secs + 1);
+    s.client.finalize(&id);
 }
 
 /// The worked example: OKC vs SAS, $1,000 pool. A and F are regular
@@ -168,7 +186,7 @@ fn scenario_1_okc_by_12() {
     assert_eq!(TokenClient::new(&s.env, &ta).balance(&p[0]), 400 * USDC);
 
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&1, &0, &12);
+    settle_admin(&s, 1, 0, 12);
 
     // Unified, cold rungs -> par ($0.50/share): winners A(reg 400sh), B(+5,200sh),
     // C(+10,200sh) split $600 losing pool by share. sum_shares=800; A = 200 +
@@ -200,7 +218,7 @@ fn scenario_3_long_shot_by_33() {
     let s = setup();
     let (p, ..) = worked_example(&s, 1, 0);
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&1, &0, &33);
+    settle_admin(&s, 1, 0, 33);
     // Everyone on OKC wins; cold rungs -> par ($0.50/share). sum_shares =
     // 400+200+200+200+100 = 1100; dist = 450. E(+30, 100 par sh) = 50 +
     // 100*450/1100 = 90.909 USDC (flat ladder without a rung seed).
@@ -258,7 +276,7 @@ fn unified_worked_example_seeded_ladder() {
     mint(&p4, 1, 20 * USDC); // DOWN Neutral
 
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&30, &0, &10); // UP by 10: >=20 banks, DOWN loses
+    settle_admin(&s, 30, 0, 10); // UP by 10: >=20 banks, DOWN loses
 
     // Convictions >=10 win; early out-earns late; the reference values (from the
     // float sim) hold to within fixed-point-ln tolerance.
@@ -302,7 +320,7 @@ fn traded_tickets_settle_to_the_holder() {
     TokenClient::new(&s.env, &ta).transfer(&p[0], &x, &(200 * USDC));
 
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&1, &0, &12);
+    settle_admin(&s, 1, 0, 12);
 
     // A's full 400-share redeem is 500 USDC (unified), so each 200-share half
     // redeems to 250 — the claim follows the tickets regardless of who holds them.
@@ -339,7 +357,7 @@ fn rake_comes_off_losing_pool() {
     let s = setup();
     let (p, ..) = worked_example(&s, 1, 300); // 3% (S1)
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&1, &0, &12);
+    settle_admin(&s, 1, 0, 12);
     assert_eq!(s.token.balance(&s.treasury), 18 * USDC); // 3% of $600
     // Unified raked: dist = 600 - 18 = 582; sum_shares=800; A = 200 +
     // 400*582/800 = 491 USDC.
@@ -381,7 +399,7 @@ fn no_winning_positions_cancels() {
     s.client.place_conviction(&x, &8, &0, &20, &(100 * USDC)); // only a +20 on A
     s.client.mint_tickets(&y, &8, &1, &(100 * USDC));
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&8, &0, &5); // A wins by 5: nobody wins => cancel
+    settle_admin(&s, 8, 0, 5); // A wins by 5: nobody wins => cancel
     assert_eq!(s.client.get_market(&8).status, MarketStatus::Cancelled);
     assert_eq!(s.client.claim(&x, &8), 100 * USDC);
     assert_eq!(s.client.redeem(&y, &8, &1, &(200 * USDC)), 100 * USDC); // 200 sh -> $100
@@ -396,7 +414,7 @@ fn viability_empty_side_cancels() {
     s.sac.mint(&solo, &(50 * USDC));
     s.client.mint_tickets(&solo, &7, &0, &(50 * USDC));
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&7, &0, &10); // empty side B => cancel
+    settle_admin(&s, 7, 0, 10); // empty side B => cancel
     assert_eq!(s.client.get_market(&7).status, MarketStatus::Cancelled);
     assert_eq!(s.client.redeem(&solo, &7, &0, &(100 * USDC)), 50 * USDC); // 100 sh -> $50
 }
@@ -410,6 +428,9 @@ fn reflector_settles_up_move_with_tickets() {
     let feed = MockFeedClient::new(&s.env, &feed_id);
     feed.set(&6_000_000_000_000_000_000i128, &0);
     create_market(&s, 11, &[100, 300, 500], OracleKind::Reflector, &feed_id, 300, 0);
+    // Reflector markets settle instantly via settle_oracle — the optimistic
+    // propose path is rejected on the wrong oracle kind (no dispute window).
+    assert!(s.client.try_propose_result(&11, &0, &100).is_err(), "reflector: no propose path");
 
     let up = Address::generate(&s.env);
     let up5 = Address::generate(&s.env);
@@ -481,7 +502,7 @@ fn dpm_dynamic_mint_rewards_early_and_conserves() {
     assert!(sh_early > sh_late, "early {sh_early} should exceed late {sh_late} shares");
 
     s.env.ledger().with_mut(|l| l.timestamp = 2_000);
-    s.client.settle_admin(&20, &0, &10); // OKC wins by 10; SAS loses its $50
+    settle_admin(&s, 20, 0, 10); // OKC wins by 10; SAS loses its $50
 
     let pay_early = s.client.redeem(&early, &20, &0, &sh_early);
     let pay_late = s.client.redeem(&late, &20, &0, &sh_late);
@@ -529,4 +550,140 @@ fn dpm_cancel_refunds_money_backing_by_share() {
     assert!(refund_buyer > 20 * USDC, "cheap buyer's fungible shares are worth more");
     assert_eq!(s.token.balance(&s.treasury), 0, "no rake on cancel");
     assert!(s.token.balance(&s.client.address) < 10, "pot cleared modulo dust");
+}
+
+// --- Phase 2: optimistic oracle (propose / dispute / resolve / finalize) ---
+
+/// Happy path: post -> window -> finalize. Claims/redeems are frozen during
+/// the window, and finalize is rejected before the window elapses.
+#[test]
+fn optimistic_finalize_happy_path() {
+    let s = setup();
+    let (p, _ta, _tb) = worked_example(&s, 1, 0);
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.propose_result(&1, &0, &12);
+    assert_eq!(s.client.get_market(&1).status, MarketStatus::Proposed);
+
+    // frozen during the dispute window
+    assert!(s.client.try_claim(&p[1], &1).is_err(), "claim frozen in window");
+    assert!(s.client.try_redeem(&p[0], &1, &0, &(400 * USDC)).is_err(), "redeem frozen");
+    // can't finalize before the deadline (2000 + 500)
+    assert!(s.client.try_finalize(&1).is_err(), "finalize before window");
+
+    s.env.ledger().with_mut(|l| l.timestamp = 2_600);
+    s.client.finalize(&1);
+    assert_eq!(s.client.get_market(&1).status, MarketStatus::Settled);
+    // settles exactly like the old instant path (scenario 1): A = $500
+    assert_close(s.client.redeem(&p[0], &1, &0, &(400 * USDC)), 5_000_000_000, 3, "A after finalize");
+}
+
+/// A valid dispute corrects the result: bond refunded, window restarts, the
+/// corrected winner is what finalizes.
+#[test]
+fn dispute_corrected_refunds_and_restarts() {
+    let s = setup();
+    let (p, ..) = worked_example(&s, 1, 300);
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.propose_result(&1, &1, &5); // admin wrongly posts SAS by 5
+
+    let d = Address::generate(&s.env);
+    s.sac.mint(&d, &(100 * USDC));
+    s.client.dispute(&1, &d);
+    assert_eq!(s.token.balance(&d), 90 * USDC, "bond = 1% of $1000 = $10 escrowed");
+
+    s.env.ledger().with_mut(|l| l.timestamp = 2_600);
+    assert!(s.client.try_finalize(&1).is_err(), "finalize blocked while dispute open");
+
+    s.client.resolve_dispute(&1, &false, &0, &12); // correct to OKC by 12
+    assert_eq!(s.token.balance(&d), 100 * USDC, "bond refunded on correction");
+    assert!(s.client.try_finalize(&1).is_err(), "window restarted (deadline now 3100)");
+
+    s.env.ledger().with_mut(|l| l.timestamp = 3_200);
+    s.client.finalize(&1);
+    // corrected OKC-by-12 settles like the raked scenario 1: A = $491, rake $18
+    assert_close(s.client.redeem(&p[0], &1, &0, &(400 * USDC)), 4_910_000_000, 3, "A after corrected finalize");
+    assert_eq!(s.token.balance(&s.treasury), 18 * USDC, "only rake in treasury (bond was refunded)");
+}
+
+/// A frivolous dispute is upheld: bond forfeited to TREASURY (not the pool),
+/// the window continues, and settlement is byte-for-byte unaffected by the
+/// bond (2a T3 — the settlement-math-invariance property).
+#[test]
+fn frivolous_dispute_forfeits_to_treasury_settlement_unchanged() {
+    let s = setup();
+    let (p, ..) = worked_example(&s, 1, 0); // rake 0: treasury only ever sees the bond
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.propose_result(&1, &0, &12);
+
+    let d = Address::generate(&s.env);
+    s.sac.mint(&d, &(100 * USDC));
+    s.client.dispute(&1, &d);
+    s.client.resolve_dispute(&1, &true, &0, &0); // uphold: frivolous
+    assert_eq!(s.token.balance(&s.treasury), 10 * USDC, "frivolous bond -> treasury");
+    assert_eq!(s.token.balance(&d), 90 * USDC, "disputer lost the bond");
+
+    // window unchanged (deadline still 2500): finalize after it
+    s.env.ledger().with_mut(|l| l.timestamp = 2_600);
+    s.client.finalize(&1);
+    // A still $500 — the bond never touched the pool
+    assert_close(s.client.redeem(&p[0], &1, &0, &(400 * USDC)), 5_000_000_000, 3, "A payout unaffected by the bond");
+    assert_eq!(s.token.balance(&s.treasury), 10 * USDC, "treasury still only the bond (rake 0)");
+}
+
+/// One open dispute at a time (2a T5), and disputes are rejected once the
+/// window has elapsed.
+#[test]
+fn one_open_dispute_and_none_after_window() {
+    let s = setup();
+    worked_example(&s, 1, 0);
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.propose_result(&1, &0, &12);
+
+    let d1 = Address::generate(&s.env);
+    let d2 = Address::generate(&s.env);
+    s.sac.mint(&d1, &(100 * USDC));
+    s.sac.mint(&d2, &(100 * USDC));
+    s.client.dispute(&1, &d1);
+    assert!(s.client.try_dispute(&1, &d2).is_err(), "second concurrent dispute rejected");
+
+    s.client.resolve_dispute(&1, &true, &0, &0); // clear it (upheld)
+    s.env.ledger().with_mut(|l| l.timestamp = 2_600);
+    assert!(s.client.try_dispute(&1, &d2).is_err(), "dispute after the window rejected");
+}
+
+/// Cancelling during the dispute window refunds an open bond.
+#[test]
+fn cancel_during_window_refunds_bond() {
+    let s = setup();
+    worked_example(&s, 1, 0);
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.propose_result(&1, &0, &12);
+
+    let d = Address::generate(&s.env);
+    s.sac.mint(&d, &(100 * USDC));
+    s.client.dispute(&1, &d);
+    s.client.cancel_market(&1);
+    assert_eq!(s.client.get_market(&1).status, MarketStatus::Cancelled);
+    assert_eq!(s.token.balance(&d), 100 * USDC, "bond refunded on cancel");
+}
+
+/// The bond floor applies on a small pool (1% of $4 << $5 floor).
+#[test]
+fn dispute_bond_hits_floor_on_small_pool() {
+    let s = setup();
+    let feed = s.client.address.clone();
+    create_market(&s, 9, &[10], OracleKind::Admin, &feed, 0, 0);
+    let a = Address::generate(&s.env);
+    let b = Address::generate(&s.env);
+    s.sac.mint(&a, &(2 * USDC));
+    s.sac.mint(&b, &(2 * USDC));
+    s.client.mint_tickets(&a, &9, &0, &(2 * USDC));
+    s.client.mint_tickets(&b, &9, &1, &(2 * USDC));
+    s.env.ledger().with_mut(|l| l.timestamp = 2_000);
+    s.client.propose_result(&9, &0, &10); // pool = $4
+
+    let d = Address::generate(&s.env);
+    s.sac.mint(&d, &(10 * USDC));
+    s.client.dispute(&9, &d);
+    assert_eq!(s.token.balance(&d), 5 * USDC, "floor bond = $5 (1% of $4 is below the floor)");
 }

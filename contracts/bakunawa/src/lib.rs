@@ -39,7 +39,14 @@ use reflector::{ReflectorAsset, ReflectorClient};
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, contracterror, token, Address, Env, Symbol, Vec,
 };
-use types::{DataKey, LadderRow, Market, MarketParams, MarketStatus, OracleKind, Outcome, Position};
+use types::{
+    DataKey, Dispute, LadderRow, Market, MarketParams, MarketStatus, OracleKind, Outcome, Position,
+    Proposal,
+};
+
+/// Dispute-bond floor (Phase 2, 2a-locked): 5 USDC in stroops (7 decimals).
+/// Bond = max(this, dispute_bond_bps * pool_at_propose / 10_000).
+const DISPUTE_BOND_FLOOR: i128 = 50_000_000;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -59,6 +66,13 @@ pub enum Error {
     NothingToClaim = 12,
     NotSettled = 13,
     InvalidConfig = 14,
+    // Phase 2 — optimistic oracle
+    NotProposed = 15,        // finalize/resolve: no result posted / not in the window
+    NotDisputable = 16,      // dispute: market isn't in the dispute window
+    DisputeInProgress = 17,  // dispute: one is already open (max one at a time)
+    NoDispute = 18,          // resolve_dispute: nothing open to resolve
+    WindowStillOpen = 19,    // finalize: dispute window hasn't elapsed
+    WindowElapsed = 20,      // dispute: window already closed
 }
 
 #[contract]
@@ -87,6 +101,15 @@ impl Bakunawa {
             panic_with_error!(&env, Error::MarketExists);
         }
         if params.close_ts > params.settle_ts || params.rake_bps > 10_000 || params.min_pool < 0 {
+            panic_with_error!(&env, Error::InvalidConfig);
+        }
+        if params.dispute_bond_bps > 10_000 {
+            panic_with_error!(&env, Error::InvalidConfig);
+        }
+        // Admin (posted-result) markets run the optimistic oracle: a positive
+        // dispute window is required. Reflector markets settle instantly and
+        // ignore the dispute fields.
+        if params.oracle == OracleKind::Admin && params.dispute_secs == 0 {
             panic_with_error!(&env, Error::InvalidConfig);
         }
         let mut prev = 0u32;
@@ -121,6 +144,8 @@ impl Bakunawa {
             min_pool: params.min_pool,
             ticket_a: params.ticket_a,
             ticket_b: params.ticket_b,
+            dispute_secs: params.dispute_secs,
+            dispute_bond_bps: params.dispute_bond_bps,
             status: MarketStatus::Open,
         };
         env.storage().persistent().set(&DataKey::Market(id), &market);
@@ -255,7 +280,10 @@ impl Bakunawa {
         let reg_money = regular(&env, id, side);
         let reg_shares = regular_shares(&env, id, side);
         let payout = match market.status {
-            MarketStatus::Open => panic_with_error!(&env, Error::NotSettled),
+            // Open or during the dispute window: no payout on an un-final result.
+            MarketStatus::Open | MarketStatus::Proposed => {
+                panic_with_error!(&env, Error::NotSettled)
+            }
             MarketStatus::Cancelled => {
                 // full refund = the money backing each share (never par, or
                 // shares > dollars would over-pay and break solvency)
@@ -300,8 +328,11 @@ impl Bakunawa {
         payout
     }
 
-    /// Admin-oracle settlement (MVP sports path): curator posts the result.
-    pub fn settle_admin(env: Env, id: u64, winner: u32, margin: u32) {
+    /// Admin oracle (Phase 2, optimistic) — POST a result and open the dispute
+    /// window. This does NOT settle: claims/redeems stay frozen until
+    /// `finalize`. Replaces the old instant `settle_admin`. Reflector markets
+    /// settle instantly via `settle_oracle` and never call this.
+    pub fn propose_result(env: Env, id: u64, winner: u32, margin: u32) {
         admin(&env).require_auth();
         let market = get_market(&env, id);
         if market.oracle != OracleKind::Admin {
@@ -310,8 +341,104 @@ impl Bakunawa {
         if winner > 1 {
             panic_with_error!(&env, Error::InvalidSide);
         }
-        require_settleable(&env, &market);
-        settle_inner(&env, market, winner, margin);
+        require_settleable(&env, &market); // status Open, now >= settle_ts
+        let pool = side_stake(&env, id, 0) + side_stake(&env, id, 1);
+        let deadline = env.ledger().timestamp() + market.dispute_secs;
+        env.storage().persistent().set(
+            &DataKey::Proposal(id),
+            &Proposal { winner, margin, deadline, pool_at_propose: pool },
+        );
+        set_status(&env, id, MarketStatus::Proposed);
+        env.events()
+            .publish((Symbol::new(&env, "propose"), id), (winner, margin, deadline));
+    }
+
+    /// Dispute a posted result (permissionless). Escrows a bond
+    /// `max(FLOOR, dispute_bond_bps * pool_at_propose / 10_000)` USDC, held
+    /// outside the pool aggregates. Blocks `finalize` until the admin resolves
+    /// it; at most one open per market (2a T5). Rejected once the window closes.
+    pub fn dispute(env: Env, id: u64, disputer: Address) {
+        disputer.require_auth();
+        let market = get_market(&env, id);
+        if market.status != MarketStatus::Proposed {
+            panic_with_error!(&env, Error::NotDisputable);
+        }
+        if env.storage().persistent().has(&DataKey::Dispute(id)) {
+            panic_with_error!(&env, Error::DisputeInProgress);
+        }
+        let proposal: Proposal = env.storage().persistent().get(&DataKey::Proposal(id)).unwrap();
+        if env.ledger().timestamp() >= proposal.deadline {
+            panic_with_error!(&env, Error::WindowElapsed);
+        }
+        let bond = dispute_bond(proposal.pool_at_propose, market.dispute_bond_bps);
+        token::Client::new(&env, &stake_token(&env)).transfer(
+            &disputer,
+            &env.current_contract_address(),
+            &bond,
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(id), &Dispute { disputer: disputer.clone(), bond });
+        env.events()
+            .publish((Symbol::new(&env, "dispute"), id, disputer), bond);
+    }
+
+    /// Resolve the open dispute (admin). `uphold = true`: the posted result
+    /// stands, bond forfeited to treasury, window CONTINUES (no restart, no
+    /// pad-the-pool — 2a T3). `uphold = false`: result corrected to
+    /// (winner, margin), bond refunded to the disputer, window RESTARTS.
+    pub fn resolve_dispute(env: Env, id: u64, uphold: bool, winner: u32, margin: u32) {
+        admin(&env).require_auth();
+        let market = get_market(&env, id);
+        if market.status != MarketStatus::Proposed {
+            panic_with_error!(&env, Error::NotDisputable);
+        }
+        let dispute: Dispute = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Dispute(id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NoDispute));
+        let mut proposal: Proposal =
+            env.storage().persistent().get(&DataKey::Proposal(id)).unwrap();
+        let stake = token::Client::new(&env, &stake_token(&env));
+        if uphold {
+            let treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
+            stake.transfer(&env.current_contract_address(), &treasury, &dispute.bond);
+            // window continues: deadline unchanged, proposal unchanged
+        } else {
+            if winner > 1 {
+                panic_with_error!(&env, Error::InvalidSide);
+            }
+            stake.transfer(&env.current_contract_address(), &dispute.disputer, &dispute.bond);
+            proposal.winner = winner;
+            proposal.margin = margin;
+            proposal.deadline = env.ledger().timestamp() + market.dispute_secs; // restart
+            env.storage().persistent().set(&DataKey::Proposal(id), &proposal);
+        }
+        env.storage().persistent().remove(&DataKey::Dispute(id));
+        env.events().publish(
+            (Symbol::new(&env, "resolve"), id),
+            (uphold, proposal.winner, proposal.margin),
+        );
+    }
+
+    /// Finalize a posted result once its window has elapsed with no open
+    /// dispute (permissionless). Runs the SAME `settle_inner` as the instant
+    /// paths — settlement math unchanged; viability cancels still apply.
+    pub fn finalize(env: Env, id: u64) {
+        let market = get_market(&env, id);
+        if market.status != MarketStatus::Proposed {
+            panic_with_error!(&env, Error::NotProposed);
+        }
+        if env.storage().persistent().has(&DataKey::Dispute(id)) {
+            panic_with_error!(&env, Error::DisputeInProgress);
+        }
+        let proposal: Proposal = env.storage().persistent().get(&DataKey::Proposal(id)).unwrap();
+        if env.ledger().timestamp() < proposal.deadline {
+            panic_with_error!(&env, Error::WindowStillOpen);
+        }
+        env.storage().persistent().remove(&DataKey::Proposal(id));
+        settle_inner(&env, market, proposal.winner, proposal.margin);
     }
 
     /// Reflector settlement (crypto markets) — permissionless trigger.
@@ -348,9 +475,22 @@ impl Bakunawa {
     pub fn cancel_market(env: Env, id: u64) {
         admin(&env).require_auth();
         let market = get_market(&env, id);
-        if market.status != MarketStatus::Open {
+        // Cancellable while Open or during the dispute window (abandoned event).
+        if market.status != MarketStatus::Open && market.status != MarketStatus::Proposed {
             panic_with_error!(&env, Error::MarketNotOpen);
         }
+        // Refund an open dispute bond, if any, and drop the posted result.
+        let dkey = DataKey::Dispute(id);
+        if env.storage().persistent().has(&dkey) {
+            let dispute: Dispute = env.storage().persistent().get(&dkey).unwrap();
+            token::Client::new(&env, &stake_token(&env)).transfer(
+                &env.current_contract_address(),
+                &dispute.disputer,
+                &dispute.bond,
+            );
+            env.storage().persistent().remove(&dkey);
+        }
+        env.storage().persistent().remove(&DataKey::Proposal(id));
         cancel_inner(&env, market);
     }
 
@@ -397,7 +537,9 @@ impl Bakunawa {
                     }
                 }
             }
-            MarketStatus::Open => panic_with_error!(&env, Error::NotSettled),
+            MarketStatus::Open | MarketStatus::Proposed => {
+                panic_with_error!(&env, Error::NotSettled)
+            }
         }
 
         if payout <= 0 {
@@ -425,6 +567,22 @@ impl Bakunawa {
             .persistent()
             .get(&DataKey::Outcome(id))
             .unwrap_or_else(|| panic_with_error!(&env, Error::NotSettled))
+    }
+
+    /// Posted result + dispute window (Phase 2, Admin markets in `Proposed`).
+    pub fn get_proposal(env: Env, id: u64) -> Proposal {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Proposal(id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotProposed))
+    }
+
+    /// The single open dispute, if any (Phase 2).
+    pub fn get_dispute(env: Env, id: u64) -> Dispute {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Dispute(id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NoDispute))
     }
 
     /// Full stake ladder: rung 0 = REGULAR (ticket-minted) stake per side,
@@ -519,6 +677,22 @@ fn side_stake(env: &Env, id: u64, side: u32) -> i128 {
         .persistent()
         .get(&DataKey::SideStake(id, side))
         .unwrap_or(0)
+}
+
+fn set_status(env: &Env, id: u64, status: MarketStatus) {
+    let mut market = get_market(env, id);
+    market.status = status;
+    env.storage().persistent().set(&DataKey::Market(id), &market);
+}
+
+/// Dispute bond (2a): `max(FLOOR, dispute_bond_bps * pool / 10_000)`.
+fn dispute_bond(pool: i128, bps: u32) -> i128 {
+    let proportional = pool * (bps as i128) / 10_000;
+    if proportional > DISPUTE_BOND_FLOOR {
+        proportional
+    } else {
+        DISPUTE_BOND_FLOOR
+    }
 }
 
 fn ticket_for(market: &Market, side: u32) -> Address {
