@@ -24,7 +24,7 @@ import {
 } from "@/lib/bakunawa";
 import { CONFIG, formatUsdc, parseUsdc } from "@/lib/config";
 import { sharePrice, sharesForDollars } from "@/lib/dpm";
-import { quoteBuy } from "@/lib/parimutuel";
+import { quoteBuy, sharePrice as rungSharePrice } from "@/lib/parimutuel";
 import { recordNeutralEntry, recordPositionMeta } from "@/lib/positions-meta";
 import { ui } from "@/lib/ui";
 import { useWallet } from "@/lib/wallet-context";
@@ -124,8 +124,15 @@ export function PredictionSlip({
     return quoteBuy(ladder, selected.side, selected.rung, Number(stake), market.rungs, market.rakeBps);
   }, [selling, ladder, selected, market.rungs, market.rakeBps, stake]);
   const range = quote?.range ?? null;
-  const pricePerShare = quote?.pricePerShare ?? sidePrice(selected.side);
   const rangePoint = range !== null && Math.abs(range.max - range.min) < 0.005;
+  // Phase 1.14 — share-leverage display: fix the shown unit price at the SIDE's
+  // neutral money-share price and move the per-rung variation into a leverage
+  // ×N = side-neutral ÷ rung spot price (shares-per-$ at this margin vs the
+  // side's neutral — deterministic at buy time, so leverage, NOT payout odds).
+  // Same shares minted; presentation only.
+  const sideNeutralPrice = sidePrice(selected.side);
+  const rungSpotPrice = rungSharePrice(ladder, selected.side, selected.rung);
+  const leverage = rungSpotPrice > 0 ? sideNeutralPrice / rungSpotPrice : 1;
   // "To win" = gross payout if the side wins, in USDC. The unified ROI already
   // accounts for share pricing (quoteBuy mints the probe's shares), so this is
   // just stake x (1 + ROI) for both Neutral and convictions.
@@ -275,11 +282,9 @@ export function PredictionSlip({
     ? book.bid
       ? `best bid $${Number(book.bid).toFixed(3)}`
       : "no bid"
-    : neutralQuote
-      ? `avg $${neutralQuote.avg.toFixed(3)} / share`
-      : mode === "conviction"
-        ? `$${pricePerShare.toFixed(4)} / share`
-        : " ";
+    : selected.rung >= 1
+      ? `×${leverage.toFixed(1)} leverage`
+      : ""; // Neutral is ×1 and its price is already on the side button
 
   return (
     <div className="rounded-xl border border-line bg-panel/90 p-4 shadow-lg shadow-black/20">
