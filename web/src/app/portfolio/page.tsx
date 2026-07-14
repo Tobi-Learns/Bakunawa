@@ -33,7 +33,7 @@ import { formatUsdc } from "@/lib/config";
 import { uiStatus, type UiStatus } from "@/lib/market-status";
 import { knownMarketIds } from "@/lib/markets-registry";
 import { getLiveMove, type LiveMove } from "@/lib/reflector";
-import { outcomeRung, settlePayout, type RungState } from "@/lib/parimutuel";
+import { outcomeRung, settlePayout, sharePrice, type RungState } from "@/lib/parimutuel";
 import { fetchProfile, neutralBasisFrom, type ProfileData } from "@/lib/profile";
 import { useAccount } from "@/lib/use-account";
 import { useWallet } from "@/lib/wallet-context";
@@ -312,14 +312,23 @@ export default function PortfolioPage() {
                   rung: 0,
                   shares: held,
                   stake: 0,
-                  boughtAt: basis ? `$${basis.avgPrice.toFixed(4)}` : "—",
+                  // Neutral is the side's own price → ×1, so just the price
+                  // (2 dp for the odds-board look, Phase 1.14).
+                  boughtAt: basis ? `$${basis.avgPrice.toFixed(2)}` : "—",
                   cost: basis ? num(held) * basis.avgPrice : null,
                   redeem: held,
                 });
               }
             }
             w.positions.forEach((p, i) => {
-              const price = num(p.shares) > 0 ? num(p.stake) / num(p.shares) : 0;
+              // Phase 1.14 — leverage form: show the side's neutral price + an
+              // entry leverage ×N instead of the raw rung $/share. entry price =
+              // stake/shares (on-chain); ×N = side-neutral ÷ entry price, so the
+              // pair "$A · ×N" reconstructs the real per-share price paid
+              // (A ÷ N = stake/shares). ×N is leverage vs neutral, NOT payout odds.
+              const entryPrice = num(p.shares) > 0 ? num(p.stake) / num(p.shares) : 0;
+              const sideNeutral = sharePrice(g.ladder, p.side, 0);
+              const lev = entryPrice > 0 ? sideNeutral / entryPrice : 1;
               rows.push({
                 key: `c${i}-${w.address}`,
                 owner: w.address,
@@ -327,7 +336,7 @@ export default function PortfolioPage() {
                 rung: p.rung,
                 shares: p.shares,
                 stake: num(p.stake),
-                boughtAt: `$${price.toFixed(4)}`,
+                boughtAt: `$${sideNeutral.toFixed(2)} · ×${lev.toFixed(1)}`,
                 cost: num(p.stake), // convictions: stake is the cost basis (on-chain)
               });
             });
@@ -449,7 +458,9 @@ export default function PortfolioPage() {
       )}
       <p className="text-xs leading-relaxed text-ink-subtle">
         States refresh from chain every 15s. Every holding is share-denominated;
-        price/share is the crowd probability ($0.01–$0.99). Open positions show a
+        price/share is the crowd probability ($0.01–$0.99). Dominance-margin buys
+        show as the side&rsquo;s neutral price × a leverage ×N (more shares per
+        dollar than neutral — leverage, not payout odds). Open positions show a
         min–max range because the payout depends on the final margin — deeper
         same-side convictions bank into your share when they miss and take a cut
         when they land. Payout is a parimutuel pool split, not a fixed $1/share.
