@@ -142,6 +142,22 @@
                     },
                     {
                       "key": {
+                        "symbol": "dispute_bond_bps"
+                      },
+                      "val": {
+                        "u32": 100
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "dispute_secs"
+                      },
+                      "val": {
+                        "u64": 500
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "feed"
                       },
                       "val": {
@@ -1039,7 +1055,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-              "function_name": "settle_admin",
+              "function_name": "propose_result",
               "args": [
                 {
                   "u64": 1
@@ -1057,6 +1073,8 @@
         }
       ]
     ],
+    [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB6KO",
@@ -1172,7 +1190,7 @@
   "ledger": {
     "protocol_version": 22,
     "sequence_number": 0,
-    "timestamp": 2000,
+    "timestamp": 2501,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -2693,6 +2711,22 @@
                       },
                       "val": {
                         "u64": 1000
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "dispute_bond_bps"
+                      },
+                      "val": {
+                        "u32": 100
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "dispute_secs"
+                      },
+                      "val": {
+                        "u64": 500
                       }
                     },
                     {

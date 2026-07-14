@@ -14,6 +14,10 @@ pub enum OracleKind {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MarketStatus {
     Open,
+    /// Admin oracle only (Phase 2): a result is posted and the dispute window
+    /// is running. Claims/redeems are frozen; `finalize` moves it to Settled.
+    /// Reflector markets never pass through here (they settle instantly).
+    Proposed,
     Settled,
     Cancelled,
 }
@@ -48,6 +52,8 @@ pub struct Market {
     pub min_pool: i128,        // viability threshold at settlement (S5)
     pub ticket_a: Address,     // side-0 ticket SAC (classic asset, pre-minted here)
     pub ticket_b: Address,     // side-1 ticket SAC
+    pub dispute_secs: u64,     // Admin oracle: dispute-window length (Phase 2; 0 for Reflector)
+    pub dispute_bond_bps: u32, // Admin oracle: bond = max(FLOOR, bps * pool) (Phase 2)
     pub status: MarketStatus,
 }
 
@@ -68,6 +74,8 @@ pub struct MarketParams {
     pub min_pool: i128,
     pub ticket_a: Address,
     pub ticket_b: Address,
+    pub dispute_secs: u64,     // Admin oracle only (Phase 2); ignored for Reflector
+    pub dispute_bond_bps: u32, // Admin oracle only (Phase 2); ignored for Reflector
 }
 
 /// Written once at settlement; claims/redeems are computed from this + the
@@ -98,6 +106,29 @@ pub struct Position {
     pub claimed: bool,
 }
 
+/// A posted-but-not-final result during the dispute window (Phase 2, Admin
+/// oracle). `pool_at_propose` is frozen here so the dispute bond
+/// (`max(FLOOR, bps * pool)`) can't be moved by post-propose activity.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Proposal {
+    pub winner: u32,
+    pub margin: u32,
+    pub deadline: u64,         // dispute window ends at this ledger timestamp
+    pub pool_at_propose: i128, // total pool at propose-time (bond base)
+}
+
+/// An open dispute against a `Proposal` (Phase 2). The bond is escrowed USDC
+/// held OUTSIDE the pool aggregates — orthogonal to `settle_inner`, so
+/// settlement math is unchanged. Resolved to treasury (upheld) or the disputer
+/// (corrected). At most one is open per market.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Dispute {
+    pub disputer: Address,
+    pub bond: i128,
+}
+
 /// Ladder row for UI reads (implied payouts are computed client-side). Carries
 /// both the money (`stake`) and the DPM `shares` at each rung (1.13).
 #[contracttype]
@@ -117,6 +148,10 @@ pub enum DataKey {
     Treasury,   // rake destination
     Market(u64),
     Outcome(u64),
+    /// (market) -> Proposal: posted result + dispute window (Phase 2, Admin)
+    Proposal(u64),
+    /// (market) -> Dispute: the single open dispute, if any (Phase 2)
+    Dispute(u64),
     /// (market, side, rung>=1) -> total CONVICTION stake (money) at exactly this rung
     Agg(u64, u32, u32),
     /// (market, side, rung>=1) -> total CONVICTION SHARES at exactly this rung
