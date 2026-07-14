@@ -1,21 +1,25 @@
-// Randomized market seeder — fills a market with many randomized trades to
-// simulate real activity + volume. Rung selection is per-side weighted so a
-// side can look DOMINANT (heavy high-margin convictions) vs meek (low margins).
+// Randomized showcase seeder for the GSW vs CAV dominance market (Game 4, 2015
+// Finals). Fires many small, PROBABILISTIC trades so the aggregate APPROXIMATES
+// a target shape with natural noise (never exact — that looks designed). Amounts
+// are a genuine mix of high and low ($1–$300). Money split = the crowd forecast
+// (side_stake tracks dollars), so ~80/20 by trade count ≈ ~80/20 by dollars.
 //
-// Usage: node scripts/seed-random.mjs <marketId> <numTrades> [source]
-// Tuned for GSW (side 0) dominance vs CAV (side 1): GSW draws skew to high
-// rungs, CAV to low. Amounts are random; total volume ~= numTrades * ~750 USDC.
-// CLI-based (like house-seed) so trustlines/keychain/sequence just work.
+// Target shape (Tobi, 2026-07-14), as sampling weights, not exact targets:
+//   GSW (side 0) ~80% of trades:  Neutral 20, each of +5..+25 = 16
+//   CAV (side 1) ~20% of trades:  Neutral 70, +5 = 10, +10 = 10, deep rest = 10 split
+//
+// Usage: node scripts/seed-random.mjs <marketId> [numTrades=200] [source=platform]
+// Idempotent-friendly: run again to ADD more trades (they just accrue).
 
 import { execSync } from "child_process";
 
-const CONTRACT = "CBQC2M3DIK3GRXPOWL3R2PR3YGZMY43CVRNZEUWYFZB6I4W5PO43KRAW";
-const [marketId, numTradesArg, source = "platform"] = process.argv.slice(2);
-if (!marketId || !numTradesArg) {
-  console.error("usage: node scripts/seed-random.mjs <marketId> <numTrades> [source]");
+const CONTRACT = "CABM224YYRE67THADIM7NPYKZWM6Q7EOHOVYSD2KRYLRW6BDLTCTL72R";
+const [marketId, numArg = "200", source = "platform"] = process.argv.slice(2);
+if (!marketId) {
+  console.error("usage: node scripts/seed-random.mjs <marketId> [numTrades] [source]");
   process.exit(1);
 }
-const numTrades = Number(numTradesArg);
+const numTrades = Number(numArg);
 
 const sh = (cmd) => execSync(cmd, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const invoke = (args, send = true) => {
@@ -32,9 +36,9 @@ if (market.status !== "Open") {
   console.error(`market ${marketId} is ${market.status}, not Open`);
   process.exit(1);
 }
-const rungs = market.rungs; // e.g. [5,10,15,20,25,30]
+const rungs = market.rungs; // expected [5,10,15,20,25]
 
-// ensure ticket trustlines for regular (rung-0) mints
+// ticket trustlines for regular (rung-0) mints
 for (const suffix of ["A", "B"]) {
   try {
     sh(`stellar tx new change-trust --source-account ${source} --line BK${marketId}${suffix}:${issuer} --network testnet`);
@@ -43,11 +47,11 @@ for (const suffix of ["A", "B"]) {
   }
 }
 
-// per-side rung weights over [0=regular, ...rungs]. GSW (0) skews to deep
-// dominance, CAV (1) to shallow margins.
+// sampling weights over steps [0=Neutral, ...rungs]
 const steps = [0, ...rungs];
-const gswW = [12, 8, 10, 16, 18, 16, 14].slice(0, steps.length); // heavy high
-const cavW = [28, 26, 20, 12, 7, 5, 3].slice(0, steps.length); // heavy low
+const gswW = [20, ...rungs.map(() => 16)]; // Neutral 20, each rung 16
+const nDeep = Math.max(1, rungs.length - 2);
+const cavW = [70, ...rungs.map((_, i) => (i === 0 || i === 1 ? 10 : 10 / nDeep))];
 const pick = (w) => {
   const sum = w.reduce((a, b) => a + b, 0);
   let r = Math.random() * sum;
@@ -61,13 +65,11 @@ const rint = (lo, hi) => Math.floor(lo + Math.random() * (hi - lo + 1));
 
 let volume = 0n;
 let ok = 0;
-console.log(`seeding ${numTrades} randomized trades into #${marketId} (GSW-dominance)…`);
+console.log(`seeding ${numTrades} probabilistic trades into #${marketId} (GSW ~80/20, approx shape)…`);
 for (let t = 0; t < numTrades; t++) {
-  const side = Math.random() < 0.65 ? 0 : 1; // GSW gets ~65% of the action
-  const stepIdx = pick(side === 0 ? gswW : cavW);
-  const rung = steps[stepIdx];
-  // deep dominance convictions run smaller; regular/shallow run larger
-  const usdc = rung >= 15 ? rint(50, 600) : rint(200, 1600);
+  const side = Math.random() < 0.8 ? 0 : 1; // GSW ~80% of the action
+  const rung = steps[pick(side === 0 ? gswW : cavW)];
+  const usdc = rint(1, 300); // mix of high and low
   const amount = BigInt(usdc) * 10_000_000n;
   try {
     if (rung === 0) {
@@ -77,11 +79,9 @@ for (let t = 0; t < numTrades; t++) {
     }
     volume += amount;
     ok++;
-    if (ok % 10 === 0) {
-      console.log(`  ${ok}/${numTrades} done · volume ~${(Number(volume) / 1e7).toFixed(0)} USDC`);
-    }
+    if (ok % 20 === 0) console.log(`  ${ok}/${numTrades} · volume ~${(Number(volume) / 1e7).toFixed(0)} USDC`);
   } catch (e) {
     console.error(`  trade ${t} (side ${side} rung ${rung}) failed: ${String(e).split("\n")[0]}`);
   }
 }
-console.log(`\ndone: ${ok}/${numTrades} trades, total volume ~${(Number(volume) / 1e7).toFixed(0)} USDC`);
+console.log(`\ndone: ${ok}/${numTrades} trades, added volume ~${(Number(volume) / 1e7).toFixed(0)} USDC`);

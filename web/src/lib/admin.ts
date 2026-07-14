@@ -23,6 +23,11 @@ export interface CreateMarketParams {
    *  sequence; the form accepts the SAC addresses it prints). */
   ticketA: string;
   ticketB: string;
+  /** Phase 2 optimistic oracle (Admin markets): dispute window + pool-proportional
+   *  bond. Optional here — default to the 2a-locked 24h / 100 bps; 2e surfaces
+   *  proper inputs. Reflector markets ignore them (window forced to 0). */
+  disputeSecs?: number;
+  disputeBondBps?: number;
 }
 
 /** MarketParams struct ScVal — entries MUST be sorted by field name (XDR map). */
@@ -33,6 +38,11 @@ function marketParamsScVal(p: CreateMarketParams): xdr.ScVal {
   return xdr.ScVal.scvMap([
     entry("asset", xdr.ScVal.scvSymbol(p.oracle === "Reflector" ? p.asset : "NA")),
     entry("close_ts", nativeToScVal(BigInt(p.closeTs), { type: "u64" })),
+    entry("dispute_bond_bps", nativeToScVal(p.disputeBondBps ?? 100, { type: "u32" })),
+    entry(
+      "dispute_secs",
+      nativeToScVal(BigInt(p.oracle === "Reflector" ? 0 : (p.disputeSecs ?? 86400)), { type: "u64" }),
+    ),
     entry("feed", new Address(feed).toScVal()),
     entry("id", nativeToScVal(p.id, { type: "u64" })),
     entry("min_pool", nativeToScVal(p.minPool, { type: "i128" })),

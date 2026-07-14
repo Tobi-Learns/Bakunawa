@@ -1,6 +1,8 @@
 # Build, deploy, and initialize the Bakunawa contract on testnet.
 # Identities (shared with StellarPay, ~/.config/stellar/identity):
-#   platform  = admin (curator)      stellarpay = treasury (rake destination)
+#   platform  = admin (curator)      bakunawa-treasury = rake destination
+# Dedicated Bakunawa treasury (Phase 2, 2026-07-14): GAABUAA3...W76I2B — its own
+# account so Bakunawa rake doesn't mix with StellarPay's shared `stellarpay`.
 # Stake asset: the StellarPay test USDC SAC (issuer = platform).
 # Usage: .\scripts\deploy-bakunawa.ps1
 
@@ -22,7 +24,7 @@ try {
 
     Write-Host "== initialize =="
     $admin = stellar keys address platform
-    $treasury = stellar keys address stellarpay
+    $treasury = stellar keys address bakunawa-treasury
     stellar contract invoke --network testnet --source-account platform `
         --id $contractId -- initialize `
         --admin $admin --token $USDC_SAC --treasury $treasury

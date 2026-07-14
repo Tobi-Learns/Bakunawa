@@ -10,12 +10,15 @@
 
 import { execSync } from "child_process";
 
-const CONTRACT = "CBQC2M3DIK3GRXPOWL3R2PR3YGZMY43CVRNZEUWYFZB6I4W5PO43KRAW";
+const CONTRACT = "CABM224YYRE67THADIM7NPYKZWM6Q7EOHOVYSD2KRYLRW6BDLTCTL72R";
 const FEED = "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63";
 const TICKET_SUPPLY = "10000000000000000"; // 1B tickets (stroops)
 
 const [id, sideA, sideB, rungsCsv, closeIn, settleIn, oracle, asset = "BTC",
-       rakeBps = "300", minPoolUsdc = "0"] = process.argv.slice(2);
+       rakeBps = "300", minPoolUsdc = "0",
+       // Phase 2 optimistic oracle: Admin markets need a positive dispute window;
+       // Reflector markets ignore these (still passed, set to 0 window there).
+       disputeSecs = "86400", disputeBondBps = "100"] = process.argv.slice(2);
 if (!id || !sideA || !sideB || !rungsCsv || !closeIn || !settleIn || !oracle) {
   console.error("usage: node scripts/list-market.mjs <id> <sideA> <sideB> <rungsCsv> <closeInSec> <settleInSec> <Reflector|Admin> [asset] [rakeBps] [minPoolUsdc]");
   process.exit(1);
@@ -60,6 +63,8 @@ const params = {
   min_pool: minPool,
   ticket_a: sacs[0],
   ticket_b: sacs[1],
+  dispute_secs: oracle === "Reflector" ? 0 : Number(disputeSecs),
+  dispute_bond_bps: Number(disputeBondBps),
 };
 sh(`stellar contract invoke --network testnet --source-account platform --id ${CONTRACT} --send=yes -- create_market --params ${JSON.stringify(JSON.stringify(params))}`);
 console.log(`market #${id} listed: ${sideA} vs ${sideB}, rungs [${rungs}], ` +
