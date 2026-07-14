@@ -14,9 +14,10 @@ Named for the Philippine mythological serpent that swallows the moon — the poo
 >
 > | | Address |
 > |---|---|
-> | **Bakunawa contract (Soroban, testnet)** | [`CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP`](https://stellar.expert/explorer/testnet/contract/CDL2YD4DU32BYAQGHKEE4OIF7P73HMQ4HWW3Q6FOPN5SBYQWNMMPEVGP) |
+> | **Bakunawa contract (Soroban, testnet)** | [`CABM224YYRE67THADIM7NPYKZWM6Q7EOHOVYSD2KRYLRW6BDLTCTL72R`](https://stellar.expert/explorer/testnet/contract/CABM224YYRE67THADIM7NPYKZWM6Q7EOHOVYSD2KRYLRW6BDLTCTL72R) |
 > | Oracle (Reflector CEX/DEX price feed, testnet) | `CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63` |
 > | Stake asset (test USDC SAC) | `CAKBCKBUE3ZRSNH6CDYAB62ZFWL7U7OX6NBZ6EUDFID22PRLICFJXHGS` |
+> | Treasury (rake destination) | `GAABUAA3CLZCAJMXT5IRIXF2Y3JGEQP6MOP6ZZKBTIPQLQTUW7W76I2B` |
 > | Soroban RPC | `https://soroban-testnet.stellar.org` |
 > | Network passphrase | `Test SDF Network ; September 2015` |
 
@@ -119,8 +120,11 @@ mint_tickets(predictor, id, side, amount)          // neutral prediction — dyn
 place_conviction(predictor, id, side, rung, amount) // conviction — locked, all-or-nothing, rung ≥ 1
 redeem(holder, id, side, amount) -> i128           // share holders redeem after settlement / money-backing on cancel
 claim(predictor, id) -> i128                       // convictions collect winnings / refunds
-settle_admin(id, winner, margin) / settle_oracle(id) / cancel_market(id)
-get_market / get_outcome / get_ladder / get_positions / get_side_stake
+settle_oracle(id)                                  // crypto (Reflector): trustless, instant
+propose_result(id, winner, margin) -> dispute(id, disputer) -> resolve_dispute(id, uphold, ...) -> finalize(id)
+                                                   // curated (optimistic oracle): post → dispute window → finalize
+cancel_market(id)
+get_market / get_outcome / get_ladder / get_positions / get_side_stake / get_proposal / get_dispute
 ```
 
 ## Status
