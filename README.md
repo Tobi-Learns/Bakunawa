@@ -135,7 +135,7 @@ Testnet MVP. The full loop runs end-to-end: list a market → predict or convict
 
 ## Track
 
-Submitted to **Track 3 — DeFi, Stablecoins & Real-World Assets** (StellarX Philippines workshop).
+Submitted to **DeFi & Ecosystem Composability** at the APAC Stellar Hackathon.
 
 ## Team
 
